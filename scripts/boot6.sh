@@ -26,11 +26,13 @@ export PATH="$BREW/opt/cpio/bin:$BREW/opt/findutils/libexec/gnubin:$PATH"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 cp -a "$ROOTFS_DIR"/. "$WORK"/
 chmod -R u+w "$WORK"
+# rm -f first: toybox ships a `bash` symlink (usr/bin/bash -> toybox); cp onto it
+# would follow the link and clobber the toybox binary itself.
 if [ -n "${TUG_BASH:-}" ] && [ -f "$TUG_BASH" ]; then
-    cp "$TUG_BASH" "$WORK"/usr/bin/bash && chmod 755 "$WORK"/usr/bin/bash
+    rm -f "$WORK"/usr/bin/bash && cp "$TUG_BASH" "$WORK"/usr/bin/bash && chmod 755 "$WORK"/usr/bin/bash
 fi
 if [ -n "${TUG_CURL:-}" ] && [ -f "$TUG_CURL" ]; then
-    cp "$TUG_CURL" "$WORK"/usr/bin/curl && chmod 755 "$WORK"/usr/bin/curl
+    rm -f "$WORK"/usr/bin/curl && cp "$TUG_CURL" "$WORK"/usr/bin/curl && chmod 755 "$WORK"/usr/bin/curl
 fi
 if [ -n "${TUG_CACERT:-}" ] && [ -f "$TUG_CACERT" ]; then
     mkdir -p "$WORK"/etc/ssl/certs && cp "$TUG_CACERT" "$WORK"/etc/ssl/certs/ca-certificates.crt

@@ -20,11 +20,13 @@ W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cp -a "$ROOTFS_FS"/. "$W"/
 chmod -R u+w "$W"
 cp "$TUG_INIT" "$W"/init && chmod +x "$W"/init
+# rm -f first: toybox ships a `bash` symlink (usr/bin/bash -> toybox); cp onto it
+# would follow the link and clobber the toybox binary itself.
 if [ -n "${TUG_BASH:-}" ] && [ -f "$TUG_BASH" ]; then
-    cp "$TUG_BASH" "$W"/usr/bin/bash && chmod 755 "$W"/usr/bin/bash
+    rm -f "$W"/usr/bin/bash && cp "$TUG_BASH" "$W"/usr/bin/bash && chmod 755 "$W"/usr/bin/bash
 fi
 if [ -n "${TUG_CURL:-}" ] && [ -f "$TUG_CURL" ]; then
-    cp "$TUG_CURL" "$W"/usr/bin/curl && chmod 755 "$W"/usr/bin/curl
+    rm -f "$W"/usr/bin/curl && cp "$TUG_CURL" "$W"/usr/bin/curl && chmod 755 "$W"/usr/bin/curl
 fi
 if [ -n "${TUG_CACERT:-}" ] && [ -f "$TUG_CACERT" ]; then
     mkdir -p "$W"/etc/ssl/certs && cp "$TUG_CACERT" "$W"/etc/ssl/certs/ca-certificates.crt
