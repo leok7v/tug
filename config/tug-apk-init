@@ -19,14 +19,18 @@ CACERT=/tug/cacert.pem
 
 # --- mount the persistent data disk ----------------------------------------
 mkdir -p "$NEWROOT"
-if [ -b /dev/vda ] && mount -t ext4 /dev/vda "$NEWROOT" 2>/dev/null; then
-    : # mounted ext4
-elif [ -b /dev/vda ] && mount /dev/vda "$NEWROOT" 2>/dev/null; then
-    : # mounted (auto fs type)
-else
+# Verify the mount via /proc/mounts, NOT the mount command's exit status: toybox
+# `mount` can return non-zero even when the kernel mounted the fs (notably right
+# after an ext4 journal recovery from an unclean shutdown), which would wrongly
+# drop us to the fallback shell with the disk actually mounted.
+if [ -b /dev/vda ]; then
+    mount -t ext4 /dev/vda "$NEWROOT" 2>/dev/null
+    grep -q " $NEWROOT " /proc/mounts 2>/dev/null || mount /dev/vda "$NEWROOT" 2>/dev/null
+fi
+if ! grep -q " $NEWROOT " /proc/mounts 2>/dev/null; then
     echo
     echo "  tug: no writable /dev/vda data disk — apk persistence unavailable."
-    echo "       create one on the host with:  make disk   (then re-run with -d)"
+    echo "       create one on the host with:  make disk"
     echo "       dropping to the initramfs toybox shell."
     echo
     SH=/bin/sh; [ -x /bin/bash ] && SH=/bin/bash
@@ -63,14 +67,14 @@ fi
 # Created here rather than only inside the first-boot seed block so a disk that
 # was populated by something other than this init (e.g. the apkboot test
 # harness, or a future re-seed) still gets a /sbin/tug-login for switch_root to
-# exec. Cheap to rewrite each boot; the banner's __DISKSIZE__ is filled below.
+# exec. Cheap to rewrite each boot.
 cat > "$NEWROOT/etc/profile.d/tug.sh" <<'BANNER'
 # tug welcome banner
 if [ -t 0 ]; then
   echo
   echo "  tug — Alpine $(. /etc/os-release 2>/dev/null; echo "$VERSION_ID") riscv64 on TinyEMU"
   echo "  packages: apk update && apk add <pkg>   e.g.  clang  nodejs npm  python3 py3-pip  cargo"
-  echo "  storage:  persistent /  on /dev/vda (__DISKSIZE__)   scratch: /tmp"
+  echo "  storage:  persistent /  on /dev/vda ($(df -h / 2>/dev/null | awk 'NR==2{print $2}'))   scratch: /tmp"
   echo "  keys:     Ctrl-C -> guest;  Ctrl-C x3 then again -> quit tug;  poweroff -> shutdown"
   echo
 fi
@@ -90,11 +94,8 @@ chmod +x "$NEWROOT/sbin/tug-login"
 echo 'nameserver 10.0.2.3' > "$NEWROOT/etc/resolv.conf" 2>/dev/null
 [ -f "$CACERT" ] && [ -d "$NEWROOT/etc/ssl/certs" ] && \
     cp "$CACERT" "$NEWROOT/etc/ssl/certs/ca-certificates.crt" 2>/dev/null
-# fill the banner's disk-size placeholder from the actual fs size (best effort)
-if [ -f "$NEWROOT/etc/profile.d/tug.sh" ]; then
-    SZ=$(df -h "$NEWROOT" 2>/dev/null | awk 'NR==2{print $2}')
-    [ -n "$SZ" ] && sed -i "s/__DISKSIZE__/$SZ/" "$NEWROOT/etc/profile.d/tug.sh" 2>/dev/null
-fi
+# (disk size in the banner is computed at login time inside Alpine, where
+#  `df -h` is available and accurate — see the banner above.)
 
 # --- networking: slirp NAT (guest 10.0.2.15, gw 10.0.2.2, DNS 10.0.2.3) -----
 ifconfig lo   127.0.0.1 up        2>/dev/null
