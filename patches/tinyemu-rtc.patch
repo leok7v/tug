@@ -1,0 +1,67 @@
+--- a/riscv_machine.c
++++ b/riscv_machine.c
+@@ -71,6 +71,8 @@
+ #define VIRTIO_BASE_ADDR 0x40010000
+ #define VIRTIO_SIZE      0x1000
+ #define VIRTIO_IRQ       1
++#define RTC_BASE_ADDR    0x40004000
++#define RTC_IRQ          11
+ #define PLIC_BASE_ADDR 0x40100000
+ #define PLIC_SIZE      0x00400000
+ #define FRAMEBUFFER_BASE_ADDR 0x41000000
+@@ -173,7 +175,30 @@
+         break;
+     default:
+         break;
++    }
++}
++
++/* Goldfish RTC: exposes the host wall clock so the guest sets a real date at boot
++   (TinyEMU has no RTC; otherwise the clock is 1970 and TLS cert checks fail). */
++static uint32_t rtc_read(void *opaque, uint32_t offset, int size_log2)
++{
++    static uint32_t time_high;
++    if (offset == 0x00) { /* TIMER_TIME_LOW: latch now, return low 32 bits of ns */
++        struct timespec ts;
++        uint64_t ns;
++        clock_gettime(CLOCK_REALTIME, &ts);
++        ns = (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
++        time_high = (uint32_t)(ns >> 32);
++        return (uint32_t)ns;
++    } else if (offset == 0x04) { /* TIMER_TIME_HIGH: latched high 32 bits */
++        return time_high;
+     }
++    return 0;
++}
++
++static void rtc_write(void *opaque, uint32_t offset, uint32_t val, int size_log2)
++{
++    /* alarm/IRQ registers are unused — we never raise the RTC alarm */
+ }
+ 
+ #if 0
+@@ -708,6 +733,15 @@
+         fdt_end_node(s); /* virtio */
+     }
+ 
++    /* goldfish RTC (host wall clock) */
++    fdt_begin_node_num(s, "rtc", RTC_BASE_ADDR);
++    fdt_prop_str(s, "compatible", "google,goldfish-rtc");
++    fdt_prop_tab_u64_2(s, "reg", RTC_BASE_ADDR, 0x1000);
++    tab[0] = plic_phandle;
++    tab[1] = RTC_IRQ;
++    fdt_prop_tab_u32(s, "interrupts-extended", tab, 2);
++    fdt_end_node(s); /* rtc */
++
+     fb_dev = m->common.fb_dev;
+     if (fb_dev) {
+         fdt_begin_node_num(s, "framebuffer", FRAMEBUFFER_BASE_ADDR);
+@@ -893,6 +927,8 @@
+ 
+     cpu_register_device(s->mem_map, HTIF_BASE_ADDR, 16,
+                         s, htif_read, htif_write, DEVIO_SIZE32);
++    cpu_register_device(s->mem_map, RTC_BASE_ADDR, 0x1000,
++                        s, rtc_read, rtc_write, DEVIO_SIZE32);
+     s->common.console = p->console;
+ 
+     memset(vbus, 0, sizeof(*vbus));

@@ -14,11 +14,7 @@ mountpoint -q dev  || mount -t devtmpfs dev  /dev
 mountpoint -q proc || mount -t proc     proc /proc
 mountpoint -q sys  || mount -t sysfs    sys  /sys
 mkdir -p /dev/pts && { mountpoint -q dev/pts || mount -t devpts dev /dev/pts; }
-
-# Set the clock from the host time tug passes on the cmdline (no RTC otherwise);
-# without this the clock is 1970 and TLS cert validity checks fail.
-TUGDATE=$(sed -n 's/.*tugdate=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null)
-[ -n "$TUGDATE" ] && date -u "$TUGDATE" >/dev/null 2>&1
+# (wall clock is set automatically by the kernel from TinyEMU's goldfish RTC)
 
 # Networking: slirp user-mode NAT (guest 10.0.2.15, gateway 10.0.2.2, DNS 10.0.2.3).
 # No blocking NTP. resolv.conf points at the slirp resolver so DNS works.
