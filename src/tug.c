@@ -473,7 +473,7 @@ int main(int argc, char **argv)
             p->files[VM_FILE_INITRD].len = len;
         }
     } else {
-        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-b] bbl.bin Image [initrd]\n");
+        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-b] bbl.bin Image [initrd]\n");
         return 1;
     }
     vm_add_cmdline(p, cmdline);
