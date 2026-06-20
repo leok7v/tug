@@ -2,7 +2,7 @@
 #
 # Milestone 0 — TinyEMU bring-up:
 #   vendor an unmodified TinyEMU + a stock riscv64 Linux image, build headless,
-#   boot to a shell. (vendors / build / smoke)
+#   boot to a shell. (vendors / build)
 #
 # Milestone 1 — our own guest payload:
 #   build a riscv64-linux-musl cross toolchain (musl-cross-make), install kernel
@@ -108,7 +108,7 @@ GNUENV  :=
 MKE2FS  := mke2fs
 endif
 
-.PHONY: help deps vendors build smoke \
+.PHONY: help deps vendors build \
         toolchain headers rootfs boot6 orchestrator embed bash curl busyboxvi kernel \
         alpine disk apkboot embed-apk \
         clean distclean
@@ -119,7 +119,6 @@ help:
 	@echo "Milestone 0 — TinyEMU bring-up:"
 	@echo "  make vendors    download + checksum TinyEMU source and stock riscv64 image"
 	@echo "  make build      compile headless temu ($(UNAME_S))"
-	@echo "  make smoke      boot the stock image, assert a shell is reached (temu sanity)"
 	@echo
 	@echo "Milestone 1 — our guest payload:"
 	@echo "  make deps       (macOS) brew-install the GNU build userland"
@@ -167,13 +166,16 @@ $(TEMU): $(TINYEMU_TGZ) $(wildcard patches/tinyemu-*.patch)
 	$(MAKE) -C $(TINYEMU_DIR) temu CC='$(TEMU_CC)' $(TEMU_CONFIG) EMU_LIBS='$(TEMU_LIBS)'
 	@echo "built: $(TEMU)"
 
+# Extract the stock diskimage tarball — kept solely for bbl64.bin (the BIOS our
+# 6.x boot uses); the stock 4.15 kernel + cfg come with it. NOT wiped on re-run
+# so a manually-built Image-c2w (docs/kernel.md) placed here is preserved.
 $(IMAGE_DIR)/$(CFG): $(IMAGE_TGZ)
-	rm -rf $(IMAGE_DIR) && mkdir -p $(IMAGE_DIR)
+	@mkdir -p $(IMAGE_DIR)
 	tar xzf $(IMAGE_TGZ) -C $(IMAGE_DIR) --strip-components=1
 	@touch $@   # tar restores 2018 mtimes; bump so make doesn't re-extract forever
 
-smoke: $(TEMU) $(IMAGE_DIR)/$(CFG)
-	@bash scripts/smoke.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)" "$(CFG)"
+# (the old `smoke` target booted the stock 4.15 image; obsolete now that
+#  `make boot6 MODE=test` / `make apkboot MODE=test` assert our own 6.x stack.)
 
 # ---------------------------------------------------------------------------
 # Milestone 1 targets

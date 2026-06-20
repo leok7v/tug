@@ -1,0 +1,45 @@
+name: Deploy Pages
+
+# The site is a single self-contained www/index.html (built locally with
+# `make -C www`, committed). CI just stages and deploys it — no build tools
+# or AVIF encoder needed on the runner.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "www/index.html"
+      - "www/og.jpg"
+      - "www/.nojekyll"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp www/index.html _site/index.html
+          cp www/og.jpg _site/og.jpg
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

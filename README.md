@@ -5,6 +5,7 @@ execution-locked platforms (iOS/Android), with faster native paths where the
 host allows. Guest = a Unix kernel in a box (toybox + tcc + later python/js).
 
 The design rationale lives in `PLAN.md`. This README tracks what actually works.
+Website: **https://leok7v.github.io/tug/** (source in `www/`, deployed via GitHub Pages).
 
 ## Why RISC-V (and not the host ISA)
 
@@ -32,13 +33,11 @@ Silicon and boots Bellard's stock riscv64 Linux 4.15 to a shell.
 - ~260 KB arm64 `temu`, **no external libraries** (FS_NET/SDL/x86/int128 off).
 - macOS *build* portability is isolated in `compat/` shim headers; the only
   *functional* change is one tiny patch in `patches/` (see Milestone 1).
-- `make smoke` boots non-interactively and asserts a shell is reached.
 
 ```sh
 make deps      # (macOS, one-time) Homebrew GNU build userland
 make vendors   # curl + checksum TinyEMU source and the riscv64 disk image
 make build     # compile temu (applies patches/)
-make smoke     # boot stock 4.15, assert shell -> SMOKE: PASS (temu sanity)
 make boot6 MODE=test   # boot OUR 6.x kernel + rootfs, assert -> BOOT6: PASS
 ```
 
@@ -82,7 +81,7 @@ app-bundle shape: one binary = the whole sandbox.
 
 ## Run it interactively (macOS Terminal.app)
 
-The `smoke` / `boot6 MODE=test` / `apkboot MODE=test` targets assert
+The `boot6 MODE=test` and `apkboot MODE=test` targets assert
 non-interactively. To actually *use* the guest from your `zsh` prompt, run one of
 these in the foreground (your terminal is attached, so typing works):
 
@@ -159,14 +158,15 @@ builds; `-d ""` disables it.
 ## Layout
 
 ```
-Makefile            download → toolchain → toybox/tcc → rootfs → ext2 → boot
-src/tug.c           standalone programmatic orchestrator (+ virtio-blk data disk)
+Makefile            download → toolchain → toybox → rootfs → boot6 → embed
+src/tug.c           standalone programmatic orchestrator (+ virtio-blk, 9p, ssh fwd)
 config/tug-init     TinyEMU-appropriate pid-1 init for the full-system boot
 config/tug-apk-init pid-1 init that seeds + switch_roots into the Alpine apk disk
 compat/             macOS build shims (keep vendored source pristine)
-patches/            functional emulator patches (rdtime CSR), applied on extract
-scripts/            smoke.sh, bootfs.sh, boot6.sh, apkboot.sh — boot assertions
+patches/            functional emulator patches (rdtime, fence.tso, timer, …), applied on extract
+scripts/            boot6.sh, apkboot.sh, build-*.sh, embed-gen.sh
 docs/kernel.md      reproducible "our 6.x kernel on TinyEMU" recipe
+www/                self-contained landing page (GitHub Pages); `make -C www`
 vendors/            downloads + extracted sources + build (gitignored)
 ```
 

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="tug — a whole Linux in one unprivileged binary. A minimalist, zero-dependency RISC-V sandbox: boots in ~0.15s, ~38 MiB RAM, real toolchains via apk. No daemons, no root, no Docker.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://leok7v.github.io/tug/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="tug">
+<meta property="og:url" content="https://leok7v.github.io/tug/">
+<meta property="og:title" content="tug — a whole Linux in one unprivileged binary">
+<meta property="og:description" content="Minimalist zero-dependency RISC-V Linux sandbox. Boots in ~0.15s in ~38 MiB. Real toolchains via apk. No daemons, no root.">
+<meta property="og:image" content="https://leok7v.github.io/tug/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="tug — a whole Linux in one unprivileged binary">
+<meta name="twitter:description" content="Minimalist zero-dependency RISC-V Linux sandbox. ~0.15s boot, ~38 MiB, real toolchains via apk. No daemons, no root.">
+<title>tug — a whole Linux in one unprivileged binary</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('theme');
+    if (t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230a84ff%27/><path d=%27M5 21h22l-3 5H8z%27 fill=%27%23ffd23f%27/><rect x=%2712%27 y=%2710%27 width=%276%27 height=%279%27 rx=%271%27 fill=%27%23ff5e57%27/><rect x=%2716.5%27 y=%276%27 width=%273%27 height=%275%27 rx=%271%27 fill=%27%23fff%27/></svg>">
+<style>
+  :root {
+    --bg:      #f5f6f8;
+    --bg2:     #ffffff;
+    --bg3:     #eef0f3;
+    --text:    #16181d;
+    --text2:   #5b6470;
+    --accent:  #0a6ae0;
+    --accent2: #ffb000;
+    --border:  rgba(0,0,0,0.09);
+    --shadow:  0 8px 40px rgba(20,40,80,0.10);
+    --shadow2: 0 2px 10px rgba(20,40,80,0.07);
+    --code-bg: #1b1e27;
+    --code-fg: #e7eaf0;
+    --radius:  20px;
+  }
+  :root.dark {
+    --bg:      #0b0d12;
+    --bg2:     #14171e;
+    --bg3:     #1b1f28;
+    --text:    #f1f3f7;
+    --text2:   #99a2b0;
+    --accent:  #4d9bff;
+    --accent2: #ffc233;
+    --border:  rgba(255,255,255,0.10);
+    --shadow:  0 8px 40px rgba(0,0,0,0.45);
+    --shadow2: 0 2px 10px rgba(0,0,0,0.35);
+    --code-bg: #05070b;
+    --code-fg: #e7eaf0;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px; padding: 0 24px; gap: 14px;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 21px; letter-spacing: -0.02em; }
+  .brand .mark { width: 30px; height: 30px; border-radius: 8px; box-shadow: var(--shadow2); }
+  .nav-links { display: flex; align-items: center; gap: 8px; }
+  .nav-links a { color: var(--text2); font-size: 15px; font-weight: 500; padding: 7px 12px; border-radius: 9px; transition: .15s; }
+  .nav-links a:hover { color: var(--text); background: var(--bg3); }
+  .theme-btn { cursor: pointer; border: 1px solid var(--border); background: var(--bg2); color: var(--text); width: 36px; height: 36px; border-radius: 10px; font-size: 16px; line-height: 1; display: grid; place-items: center; }
+  .theme-btn:hover { background: var(--bg3); }
+
+  /* HERO */
+  header { padding: 72px 0 36px; text-align: center; }
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 6px 13px; border-radius: 999px; margin-bottom: 22px; }
+  h1 { font-size: clamp(34px, 6vw, 60px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; }
+  h1 .hl { background: linear-gradient(120deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { max-width: 680px; margin: 22px auto 0; font-size: clamp(17px, 2.3vw, 21px); color: var(--text2); }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; padding: 12px 22px; border-radius: 12px; transition: .15s; }
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: var(--shadow2); }
+  .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn-ghost { background: var(--bg2); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--bg3); }
+
+  .hero-img { margin: 44px auto 0; max-width: 720px; }
+  .hero-img img { width: 100%; border-radius: var(--radius); box-shadow: var(--shadow); }
+
+  /* STAT CHIPS */
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 40px 0 10px; }
+  .stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px; min-width: 150px; box-shadow: var(--shadow2); }
+  .stat b { display: block; font-size: 26px; letter-spacing: -0.02em; }
+  .stat span { font-size: 13px; color: var(--text2); }
+
+  /* SECTIONS */
+  section { padding: 64px 0; }
+  .section-head { text-align: center; max-width: 720px; margin: 0 auto 40px; }
+  h2 { font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.02em; font-weight: 800; line-height: 1.1; }
+  .section-head p { color: var(--text2); font-size: 18px; margin-top: 14px; }
+
+  .figure { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+  .figure img { width: 100%; border-radius: 12px; }
+  .figure figcaption { color: var(--text2); font-size: 14px; text-align: center; margin-top: 14px; }
+
+  /* FEATURE GRID */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow2); transition: .15s; }
+  .card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .card .ico { font-size: 26px; }
+  .card h3 { font-size: 19px; margin: 14px 0 8px; letter-spacing: -0.01em; }
+  .card p { color: var(--text2); font-size: 15px; }
+  .card code { background: var(--bg3); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+
+  /* CODE */
+  .code { background: var(--code-bg); color: var(--code-fg); border-radius: var(--radius); padding: 22px 24px; box-shadow: var(--shadow); overflow-x: auto; font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 14.5px; line-height: 1.7; }
+  .code .c { color: #7f8aa0; }
+  .code .p { color: #ffd23f; }
+  .code .o { color: #8be9a8; }
+  .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: 32px; align-items: center; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+
+  /* FOOTER */
+  footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: center; color: var(--text2); font-size: 14px; }
+  footer a { font-weight: 500; }
+  .foot-note { margin-top: 8px; font-style: italic; opacity: .85; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="#top">
+    <img class="mark" alt="tug" src="data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230a84ff%27/><path d=%27M5 21h22l-3 5H8z%27 fill=%27%23ffd23f%27/><rect x=%2712%27 y=%2710%27 width=%276%27 height=%279%27 rx=%271%27 fill=%27%23ff5e57%27/><rect x=%2716.5%27 y=%276%27 width=%273%27 height=%275%27 rx=%271%27 fill=%27%23fff%27/></svg>">
+    tug
+  </a>
+  <div class="nav-links">
+    <a href="#why">Why</a>
+    <a href="#features">Features</a>
+    <a href="#start">Start</a>
+    <a href="https://github.com/leok7v/tug">GitHub</a>
+    <button class="theme-btn" id="theme" aria-label="Toggle theme" title="Toggle theme">◑</button>
+  </div>
+</nav>
+
+<a id="top"></a>
+<header class="wrap">
+  <span class="eyebrow">RISC-V Linux · zero dependencies · one binary</span>
+  <h1>A whole Linux,<br><span class="hl">one unprivileged binary.</span></h1>
+  <p class="sub">tug is a minimalist sandbox that boots a real Linux 6.x kernel + userland in
+     <b>~0.15&nbsp;s</b> using <b>~38&nbsp;MiB</b> — no daemons, no root, no Docker. A "unix kernel
+     in a box" you can drop anywhere, even on locked-down phones.</p>
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/leok7v/tug">★ View on GitHub</a>
+    <a class="btn btn-ghost" href="#start">Quick start →</a>
+  </div>
+  <figure class="hero-img">
+    <img alt="A small cheerful tug boat next to a big grumpy Docker container ship" src="@@TUG_DOCKER@@" width="720" height="392" loading="eager">
+  </figure>
+  <div class="stats">
+    <div class="stat"><b>0.15s</b><span>cold boot to a shell</span></div>
+    <div class="stat"><b>~38&nbsp;MiB</b><span>peak RAM, whole VM</span></div>
+    <div class="stat"><b>1 file</b><span>self-contained binary</span></div>
+    <div class="stat"><b>0</b><span>daemons &amp; root</span></div>
+  </div>
+</header>
+
+<section id="why" class="wrap">
+  <div class="section-head">
+    <h2>Docker's a container ship. tug's a tugboat.</h2>
+    <p>Containers need a system-wide daemon, namespaces, cgroups, storage layers and root.
+       tug is a single unprivileged file: a tiny kernel, toybox, and your payload — all in one.</p>
+  </div>
+  <figure class="figure">
+    <img alt="Comic: the Docker way (system-wide daemons) versus the tug way (a single unprivileged binary)" src="@@TUG_WAY@@" width="1600" height="873" loading="lazy">
+    <figcaption>Same script, run cleanly. No daemons, user-level only — and it just feels clean.</figcaption>
+  </figure>
+</section>
+
+<section id="features" style="background:var(--bg3)">
+  <div class="wrap">
+    <div class="section-head"><h2>Small room, no elephants.</h2>
+      <p>Everything a developer agent needs, nothing it doesn't.</p></div>
+    <div class="grid">
+      <div class="card"><div class="ico">📦</div><h3>One binary</h3>
+        <p>BIOS, a Linux 6.1 kernel and an interactive rootfs are <code>.incbin</code>'d into one
+           self-contained executable. Run it from anywhere, no install.</p></div>
+      <div class="card"><div class="ico">🔓</div><h3>No daemons, no root</h3>
+        <p>Pure user-mode emulation on Fabrice Bellard's TinyEMU. Nothing system-wide, nothing
+           privileged — ideal where runtime code-gen is forbidden (iOS / Android).</p></div>
+      <div class="card"><div class="ico">🧰</div><h3>Real toolchains, on demand</h3>
+        <p>Alpine <code>apk</code> on a persistent disk: <code>essentials</code> installs
+           build-base, clang, node + npm, python + pip, rust. Downloaded when you want them.</p></div>
+      <div class="card"><div class="ico">🌐</div><h3>Networking &amp; HTTPS</h3>
+        <p>slirp user-mode NAT — the guest reaches the Internet with no host privileges.
+           curl + mbedTLS for TLS, a CA bundle baked in.</p></div>
+      <div class="card"><div class="ico">🔗</div><h3>Share files &amp; SSH in</h3>
+        <p><code>-S dir</code> mounts a host folder over 9p at <code>/mnt/share</code>;
+           <code>-L 2222:22</code> + <code>tug-sshd</code> gives you a real SSH login.</p></div>
+      <div class="card"><div class="ico">⚡</div><h3>Tiny &amp; fast</h3>
+        <p>~6.5 MiB fixed emulator overhead, boots in as little as 32 MiB, sub-0.2 s to
+           userspace. A full modern Linux sandbox in ~38 MiB.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="start" class="wrap">
+  <div class="two">
+    <div>
+      <h2>Up and running in seconds.</h2>
+      <p style="color:var(--text2);font-size:18px;margin:14px 0 24px">
+        Build the self-contained binary, boot it, and you're at a shell. Add a persistent
+        disk and <code>apk</code> brings in real toolchains.</p>
+      <div class="code"><span class="c"># build a single self-contained binary</span>
+make embed-apk
+
+<span class="c"># create a sparse 32G persistent disk (apk userland)</span>
+make disk
+
+<span class="c"># boot it — no args, no daemons</span>
+./tug-embedded-apk
+
+<span class="p">tug:~#</span> essentials        <span class="c"># install clang / node / python ...</span>
+<span class="p">tug:~#</span> apk add neovim ripgrep
+<span class="p">tug:~#</span> clang hello.c -o hello &amp;&amp; ./hello
+<span class="o">hello, world</span></div>
+    </div>
+    <figure class="figure">
+      <img alt="Comic: a Docker container's complexity versus tug having everything in one C binary" src="@@LESS_MORE@@" width="1024" height="559" loading="lazy">
+      <figcaption>Tiny Linux 6.1 kernel, toybox, static payload. All in one. No daemons. No complexity.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <a href="https://github.com/leok7v/tug">github.com/leok7v/tug</a> · MIT ·
+    built on <a href="https://bellard.org/tinyemu/">TinyEMU</a> + <a href="https://www.alpinelinux.org/">Alpine</a>
+    <div class="foot-note">No elephants in a tiny room.</div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('theme');
+    function sync(){ btn.textContent = root.classList.contains('dark') ? '☀' : '◑'; }
+    sync();
+    btn.addEventListener('click', function () {
+      root.classList.toggle('dark');
+      localStorage.setItem('theme', root.classList.contains('dark') ? 'dark' : 'light');
+      sync();
+    });
+  })();
+</script>
+</body>
+</html>
