@@ -2,24 +2,26 @@
 #
 # Milestone 0 — TinyEMU bring-up:
 #   vendor an unmodified TinyEMU + a stock riscv64 Linux image, build headless,
-#   boot to a shell. (vendors / build / smoke / boot)
+#   boot to a shell. (vendors / build / smoke)
 #
 # Milestone 1 — our own guest payload:
 #   build a riscv64-linux-musl cross toolchain (musl-cross-make), install kernel
-#   headers, cross-build toybox + tcc, assemble a rootfs with mkroot, pack it as
-#   ext2, and boot it as a full system (init=pid1) on the stock prebuilt kernel.
-#   (toolchain / headers / tcc / rootfs / ext2 / payload / bootfs)
+#   headers, cross-build toybox + bash/curl/busybox, assemble a rootfs with
+#   mkroot, and boot it on our own 6.x kernel.
+#   (toolchain / headers / rootfs / bash / curl / busyboxvi / boot6 / embed)
+#
+# Phase 4 — persistent Alpine apk userland on a virtio-block data disk:
+#   (alpine / disk / apkboot / embed-apk)
 #
 # Third-party sources are downloaded/cloned into ./vendors/ (gitignored). macOS
 # build portability for TinyEMU lives in ./compat/ shims; functional changes to
-# the emulator live as patches in ./patches/ (applied on extract) — currently
-# tinyemu-rdtime.patch, which implements the unprivileged `time` CSR (rdtime) the
-# 2019 release lacks, required to boot Linux 6.x userspace. The guest-payload
-# build needs a GNU userland on macOS — run `make deps` once (Homebrew GNU tools).
+# the emulator live as patches in ./patches/ (applied on extract) — rdtime,
+# fence.tso, rng-seed, rtc, timer. The guest-payload build needs a GNU userland
+# on macOS — run `make deps` once (Homebrew GNU tools).
 #
-# NOTE: building our own *kernel* is deferred (see `make kernel`). A native macOS
-# kernel build hits open-ended host-tool issues; the plan is a Linux container
-# for that one step. `make bootfs` boots our rootfs on the stock prebuilt kernel.
+# NOTE: building our own *kernel* is deferred (see `make kernel` / docs/kernel.md).
+# The shipped 6.x kernel (Image-c2w) is placed in vendors/diskimage/ per that doc;
+# bbl64.bin comes from the stock diskimage tarball.
 
 .DEFAULT_GOAL := help
 
@@ -88,15 +90,12 @@ GCC_VER := 13.3.0
 
 MCM_DIR    := $(VENDOR)/musl-cross-make
 TOYBOX_DIR := $(VENDOR)/toybox
-TCC_DIR    := $(VENDOR)/tinycc
-TCC_CROSS  := $(TCC_DIR)/riscv64-tcc
 
 ROOTFS_DIR := $(TOYBOX_DIR)/root/riscv64
 INITRAMFS  := $(ROOTFS_DIR)/initramfs.cpio.gz
 HEADERS    := $(SYSROOT)/include/linux/fs.h
-EXT2       := $(IMAGE_DIR)/tug-root.ext2
 
-# The guest-payload build (toybox/mkroot/tcc) assumes a GNU userland. On macOS,
+# The guest-payload build (toybox/mkroot) assumes a GNU userland. On macOS,
 # prepend Homebrew's GNU tools (run `make deps` to install them). On Linux the
 # native tools already satisfy this.
 ifeq ($(UNAME_S),Darwin)
@@ -109,8 +108,8 @@ GNUENV  :=
 MKE2FS  := mke2fs
 endif
 
-.PHONY: help deps vendors build smoke boot \
-        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator embed bash curl busyboxvi kernel \
+.PHONY: help deps vendors build smoke \
+        toolchain headers rootfs boot6 orchestrator embed bash curl busyboxvi kernel \
         alpine disk apkboot embed-apk \
         clean distclean
 
@@ -120,18 +119,13 @@ help:
 	@echo "Milestone 0 — TinyEMU bring-up:"
 	@echo "  make vendors    download + checksum TinyEMU source and stock riscv64 image"
 	@echo "  make build      compile headless temu ($(UNAME_S))"
-	@echo "  make smoke      boot the stock image, assert a shell is reached"
-	@echo "  make boot       boot the stock image interactively (exit: Ctrl-a x)"
+	@echo "  make smoke      boot the stock image, assert a shell is reached (temu sanity)"
 	@echo
 	@echo "Milestone 1 — our guest payload:"
 	@echo "  make deps       (macOS) brew-install the GNU build userland"
 	@echo "  make toolchain  build riscv64-linux-musl cross gcc (musl-cross-make) [~20-40 min]"
 	@echo "  make headers    install riscv kernel headers into the sysroot"
-	@echo "  make tcc        build the riscv64 cross-tcc + libtcc1.a"
 	@echo "  make rootfs     build the toybox rootfs + initramfs.cpio.gz (mkroot)"
-	@echo "  make ext2       pack the rootfs into an ext2 root image"
-	@echo "  make payload    toolchain -> headers -> tcc -> rootfs -> ext2"
-	@echo "  make bootfs     boot our rootfs as init on the stock kernel (assert)"
 	@echo "  make boot6      boot our own 6.x kernel to a shell (MODE=test to assert)"
 	@echo "  make orchestrator  build ./tug, the standalone programmatic emulator"
 	@echo "  make embed      build ./tug-embedded, self-contained (payload baked in)"
@@ -181,10 +175,6 @@ $(IMAGE_DIR)/$(CFG): $(IMAGE_TGZ)
 smoke: $(TEMU) $(IMAGE_DIR)/$(CFG)
 	@bash scripts/smoke.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)" "$(CFG)"
 
-boot: $(TEMU) $(IMAGE_DIR)/$(CFG)
-	@echo "Booting riscv64 Linux. Exit the emulator with: Ctrl-a x"
-	@cd $(IMAGE_DIR) && exec "$(CURDIR)/$(TEMU)" $(CFG)
-
 # ---------------------------------------------------------------------------
 # Milestone 1 targets
 # ---------------------------------------------------------------------------
@@ -216,14 +206,6 @@ $(HEADERS): $(TC_GCC)
 	  $(GNUENV) $(MAKE) -C "$$hdr" ARCH=riscv prefix= DESTDIR=$(SYSROOT) install
 	@echo "installed riscv kernel headers into $(SYSROOT)/include"
 
-tcc: $(TCC_CROSS)
-
-# Host-running cross-tcc that emits rv64 (+ the rv64 libtcc1.a runtime).
-$(TCC_CROSS):
-	test -d $(TCC_DIR) || git clone --depth 1 https://github.com/TinyCC/tinycc.git $(TCC_DIR)
-	cd $(TCC_DIR) && $(GNUENV) ./configure && $(GNUENV) $(MAKE) cross-riscv64
-	@echo "tcc: $(TCC_CROSS) (+ riscv64-libtcc1.a)"
-
 rootfs: $(INITRAMFS)
 
 # mkroot builds toybox (static rv64) and assembles a root filesystem + initramfs.
@@ -237,20 +219,6 @@ $(INITRAMFS): $(TC_GCC) $(HEADERS)
 	  LDOPTIMIZE='-Wl,--gc-sections -Wl,--as-needed' STRIP=strip \
 	  $(GNUENV) bash mkroot/mkroot.sh
 	@echo "rootfs: $(INITRAMFS)"
-
-ext2: $(EXT2)
-
-$(EXT2): $(INITRAMFS) $(IMAGE_DIR)/$(CFG)
-	rm -f $@
-	$(MKE2FS) -q -t ext2 -b 1024 -L tugroot -d $(ROOTFS_DIR)/fs -F $@ 16384
-	@echo "ext2 root image: $@"
-
-payload: $(EXT2) $(TCC_CROSS)
-	@echo "payload ready: toolchain + tcc + rootfs + ext2"
-
-# Boot our rootfs as a full system (init=pid1) on the stock prebuilt kernel.
-bootfs: $(TEMU) $(EXT2) $(IMAGE_DIR)/$(CFG)
-	@bash scripts/bootfs.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)"
 
 # Boot our OWN 6.x kernel (built per docs/kernel.md -> $(IMAGE_DIR)/Image-c2w) to
 # an interactive shell with config/tug-init. `make boot6 MODE=test` to assert.
@@ -369,12 +337,11 @@ apkboot: $(TUG_BIN) $(INITRAMFS) $(ALPINE_TGZ) $(DATA_DISK) config/tug-apk-init
 	  "$(CURDIR)/$(ALPINE_TGZ)" "$(CURDIR)/$(DATA_DISK)" $(MODE)
 
 kernel:
-	@echo "Building our OWN kernel is deferred."
-	@echo "A native macOS kernel build hits open-ended host-tool issues"
-	@echo "(case-sensitivity, GNU make, elf.h, uuid_t, ...). The plan is to"
-	@echo "build the kernel in a Linux container, which also answers whether a"
-	@echo "modern kernel boots on TinyEMU's legacy SBI. For now 'make bootfs'"
-	@echo "boots our rootfs on the stock prebuilt 4.15 kernel via ext2."
+	@echo "Rebuilding our 6.x kernel (Image-c2w) is a documented manual step:"
+	@echo "see docs/kernel.md. A native macOS kernel build hits open-ended"
+	@echo "host-tool issues (case-sensitivity, GNU make, elf.h, uuid_t, ...);"
+	@echo "the recipe handles them. The prebuilt Image-c2w already lives in"
+	@echo "vendors/diskimage/ and 'make boot6' / 'make embed' use it."
 
 # ---------------------------------------------------------------------------
 clean:

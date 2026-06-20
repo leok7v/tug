@@ -38,8 +38,8 @@ Silicon and boots Bellard's stock riscv64 Linux 4.15 to a shell.
 make deps      # (macOS, one-time) Homebrew GNU build userland
 make vendors   # curl + checksum TinyEMU source and the riscv64 disk image
 make build     # compile temu (applies patches/)
-make smoke     # boot stock 4.15, assert shell -> SMOKE: PASS
-make bootfs    # boot OUR rootfs as init on the stock kernel -> BOOTFS: PASS
+make smoke     # boot stock 4.15, assert shell -> SMOKE: PASS (temu sanity)
+make boot6 MODE=test   # boot OUR 6.x kernel + rootfs, assert -> BOOT6: PASS
 ```
 
 ### Milestone 1 — our own payload, incl. a modern kernel ✅
@@ -47,8 +47,8 @@ make bootfs    # boot OUR rootfs as init on the stock kernel -> BOOTFS: PASS
 Built entirely **natively on macOS, no Docker / no fork / no heavy deps**:
 
 - **Toolchain:** riscv64-linux-musl GCC 13.3 via musl-cross-make (`make toolchain`).
-- **toybox** rootfs via mkroot (`make rootfs`), packed as ext2 (`make ext2`).
-- **tcc** cross-compiler built; codegen verified (in-guest self-link deferred).
+- **toybox** rootfs via mkroot (`make rootfs`); the guest also gets static
+  bash/curl/busybox-vi (`make bash curl busyboxvi`), overlaid into the image.
 - **Our own Linux 6.1.176 kernel** boots on TinyEMU running our toybox userspace
   (`uname` → `6.1.176 … riscv64 Toybox`). The one ingredient TinyEMU lacked was
   the unprivileged `time` CSR (`rdtime`) modern userspace needs — a 6-line CPU
@@ -82,15 +82,9 @@ app-bundle shape: one binary = the whole sandbox.
 
 ## Run it interactively (macOS Terminal.app)
 
-The `smoke` / `bootfs` / `boot6 MODE=test` targets assert non-interactively. To
-actually *use* the guest from your `zsh` prompt, run one of these in the foreground
-(your terminal is attached, so typing works):
-
-**Stock riscv64 Linux — works right after `make build`:**
-```sh
-make boot                 # Bellard's stock 4.15 image -> a shell
-                          # exit the emulator: press Ctrl-a, then x
-```
+The `smoke` / `boot6 MODE=test` / `apkboot MODE=test` targets assert
+non-interactively. To actually *use* the guest from your `zsh` prompt, run one of
+these in the foreground (your terminal is attached, so typing works):
 
 **Our own Linux 6.x -> interactive toybox shell** (needs the 6.x kernel built, see
 [`docs/kernel.md`](docs/kernel.md); the artifacts live in `vendors/diskimage/`):
