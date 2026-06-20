@@ -1,0 +1,22 @@
+#!/bin/sh
+# tug init (pid 1) for TinyEMU: minimal system bring-up, then an interactive
+# shell. Unlike mkroot's default init it does NOT run NTP (TinyEMU has no RTC,
+# so the guest clock is epoch 0 and `sntp` would block forever). Networking is
+# brought up non-blocking; the cmdline must include virtio_net.napi_tx=false.
+export HOME=/home PATH=/bin:/sbin
+
+mountpoint -q dev  || mount -t devtmpfs dev  /dev
+mountpoint -q proc || mount -t proc     proc /proc
+mountpoint -q sys  || mount -t sysfs    sys  /sys
+mkdir -p /dev/pts && { mountpoint -q dev/pts || mount -t devpts dev /dev/pts; }
+
+# Best-effort networking (no blocking NTP). slirp user-net gateway is 10.0.2.2.
+ifconfig lo   127.0.0.1   up        2>/dev/null
+ifconfig eth0 10.0.2.15   up        2>/dev/null
+route add default gw 10.0.2.2       2>/dev/null
+
+printf '\n=== tug: riscv64 Linux %s on TinyEMU — type "poweroff -f" to exit ===\n\n' "$(uname -r)"
+
+# Give the shell a proper controlling terminal on the active console, then run it.
+setsid -c <>/dev/"$(sed '$s@.*[ /]@@' /sys/class/tty/console/active)" >&0 2>&1 /bin/sh
+poweroff -f

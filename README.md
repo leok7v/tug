@@ -54,6 +54,7 @@ Built entirely **natively on macOS, no Docker / no fork / no heavy deps**:
   the unprivileged `time` CSR (`rdtime`) modern userspace needs — a 6-line CPU
   patch (`patches/tinyemu-rdtime.patch`, auto-applied by `make build`). See
   [`docs/kernel.md`](docs/kernel.md) for the full reproducible recipe.
+  `make boot6` boots it to an interactive shell (`make boot6 MODE=test` asserts).
 
 ## Layout
 

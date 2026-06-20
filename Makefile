@@ -90,7 +90,7 @@ MKE2FS  := mke2fs
 endif
 
 .PHONY: help deps vendors build smoke boot \
-        toolchain headers tcc rootfs ext2 payload bootfs kernel \
+        toolchain headers tcc rootfs ext2 payload bootfs boot6 kernel \
         clean distclean
 
 help:
@@ -111,6 +111,7 @@ help:
 	@echo "  make ext2       pack the rootfs into an ext2 root image"
 	@echo "  make payload    toolchain -> headers -> tcc -> rootfs -> ext2"
 	@echo "  make bootfs     boot our rootfs as init on the stock kernel (assert)"
+	@echo "  make boot6      boot our own 6.x kernel to a shell (MODE=test to assert)"
 	@echo "  make kernel     (deferred) notes on building our own kernel"
 	@echo
 	@echo "  make clean / distclean"
@@ -218,6 +219,13 @@ payload: $(EXT2) $(TCC_CROSS)
 # Boot our rootfs as a full system (init=pid1) on the stock prebuilt kernel.
 bootfs: $(TEMU) $(EXT2) $(IMAGE_DIR)/$(CFG)
 	@bash scripts/bootfs.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)"
+
+# Boot our OWN 6.x kernel (built per docs/kernel.md -> $(IMAGE_DIR)/Image-c2w) to
+# an interactive shell with config/tug-init. `make boot6 MODE=test` to assert.
+MODE ?= interactive
+boot6: $(TEMU) $(INITRAMFS) $(IMAGE_DIR)/$(CFG)
+	@bash scripts/boot6.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)" \
+	  "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" $(MODE)
 
 kernel:
 	@echo "Building our OWN kernel is deferred."
