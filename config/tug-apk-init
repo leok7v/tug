@@ -111,11 +111,17 @@ chmod +x "$NEWROOT/sbin/tug-login"
 mkdir -p "$NEWROOT/usr/local/bin"
 cat > "$NEWROOT/usr/local/bin/essentials" <<'ESS'
 #!/bin/sh
-# tug essentials — install the dev toolchain via apk, idempotently.
+# tug essentials — install the dev toolchain via apk, idempotently, WITH a size
+# preview (apk add gives no size estimate or confirmation, unlike `apt install`).
 # Usage: essentials [-y|-c] [group...]   groups: core cpp js py extras (default: all)
-#   core=build-base(gcc/binutils/make/musl-dev)  cpp=clang  js=nodejs+npm+typescript
-#   py=python3+pip  extras=git+vim+curl   |  -y: no prompt   -c: check only (exit 1 if missing)
-g_core="build-base"; g_cpp="clang"; g_js="nodejs npm"; g_py="python3 py3-pip"; g_extras="git vim curl"
+#   -y: no prompt (agents)   -c: check only (exit 1 if anything missing)
+# Group -> packages / description / approx INSTALLED size (delta over the ~7 MB
+# Alpine base; measured via `apk add --simulate`; download is ~1/2 of installed):
+g_core="build-base";     d_core="gcc, make, binutils, musl-dev"; z_core="~330 MB"
+g_cpp="clang";           d_cpp="clang / llvm";                   z_cpp="~300 MB"
+g_js="nodejs npm";       d_js="nodejs, npm, typescript";         z_js="~70 MB"
+g_py="python3 py3-pip";  d_py="python3, pip";                    z_py="~50 MB"
+g_extras="git vim curl"; d_extras="git, vim, curl";              z_extras="~40 MB"
 ALL="core cpp js py extras"; YES=0; CHECK=0; GROUPS=""
 for a in "$@"; do case "$a" in
   -y|--yes) YES=1 ;; -c|--check) CHECK=1 ;;
@@ -123,22 +129,34 @@ for a in "$@"; do case "$a" in
   *) echo "essentials: unknown arg '$a' (groups: $ALL)"; exit 2 ;;
 esac; done
 [ -n "$GROUPS" ] || GROUPS="$ALL"
-pkgs=""; for grp in $GROUPS; do eval "pkgs=\"\$pkgs \$g_$grp\""; done
-missing=""; for p in $pkgs; do apk info -e "$p" >/dev/null 2>&1 || missing="$missing $p"; done
-missing="$(echo $missing)"
+# selected groups that are missing at least one package
+missing_groups=""; pkgs=""
+for grp in $GROUPS; do
+  eval gp=\$g_$grp; need=0
+  for p in $gp; do apk info -e "$p" >/dev/null 2>&1 || need=1; done
+  [ "$need" = 1 ] && { missing_groups="$missing_groups $grp"; pkgs="$pkgs $gp"; }
+done
 want_ts=0; case " $GROUPS " in *" js "*) command -v tsc >/dev/null 2>&1 || want_ts=1 ;; esac
-if [ -z "$missing" ] && [ "$want_ts" = 0 ]; then
+if [ -z "$missing_groups" ] && [ "$want_ts" = 0 ]; then
   [ "$CHECK" = 1 ] || echo "essentials: all selected toolchains already installed."
   exit 0
 fi
 [ "$CHECK" = 1 ] && exit 1
-[ -n "$missing" ] && echo "essentials: will apk add:$missing"
-[ "$want_ts" = 1 ] && echo "essentials: will npm i -g typescript"
+# size-preview table (apk won't tell you up front, so we do)
+echo
+printf "  %-7s %-30s %s\n" "GROUP" "PACKAGES" "~INSTALLED"
+for grp in $missing_groups; do
+  eval gd=\$d_$grp; eval gz=\$z_$grp
+  printf "  %-7s %-30s %s\n" "$grp" "$gd" "$gz"
+done
+[ "$want_ts" = 1 ] && printf "  %-7s %-30s %s\n" "js+" "typescript (npm -g)" "~15 MB"
+echo "  (groups share libraries, so the combined total is less than the sum;"
+echo "   it's slow under the emulator — minutes. apk prints the exact total after.)"
 if [ "$YES" != 1 ]; then
-  printf "Proceed? (hundreds of MB, several min under the emulator) [Y/n] "
-  read ans; case "$ans" in [Nn]*) echo "skipped — run 'essentials' anytime."; exit 0 ;; esac
+  printf "  Install these? [Y/n] "
+  read ans; case "$ans" in [Nn]*) echo "  skipped — run 'essentials' anytime."; exit 0 ;; esac
 fi
-[ -n "$missing" ] && { apk update && apk add $missing; }
+[ -n "$pkgs" ] && { apk update && apk add $pkgs; }
 [ "$want_ts" = 1 ] && command -v npm >/dev/null 2>&1 && npm install -g typescript
 echo "essentials: done."
 ESS
@@ -185,20 +203,17 @@ chmod +x "$NEWROOT/usr/local/bin/tug-sshd"
 # missing). Decline is remembered (marker) so it never nags again. zz- so it runs
 # after the tug.sh banner.
 cat > "$NEWROOT/etc/profile.d/zz-essentials.sh" <<'HOOK'
-# tug: offer to install dev toolchains on first interactive login.
+# tug: on first interactive login, offer the toolchains ONCE (only if missing).
+# Delegates to `essentials`, which prints the size table and asks [Y/n]. The
+# marker means it never nags again; `essentials` is always available manually.
 if [ -t 0 ] && command -v essentials >/dev/null 2>&1; then
   _m="${HOME:-/root}/.config/tug/essentials-asked"
   if [ ! -f "$_m" ] && ! essentials -c >/dev/null 2>&1; then
     mkdir -p "$(dirname "$_m")" 2>/dev/null; : > "$_m"
-    echo
-    echo "  tug: dev toolchains aren't installed yet (build-base clang node python git vim)."
-    printf "  Install them now? ~hundreds of MB, a few min under the emulator [Y/n] "
-    read _a
-    case "$_a" in [Nn]*) echo "  ok — run 'essentials' anytime (or 'essentials -y' to do it all)." ;;
-                  *) essentials -y ;; esac
-    echo
+    echo "  tug: dev toolchains aren't installed yet — sizes below."
+    essentials || echo "  run 'essentials' anytime (or 'essentials -y' for all, no prompt)."
   fi
-  unset _m _a
+  unset _m
 fi
 HOOK
 
