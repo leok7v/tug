@@ -8,12 +8,14 @@
  *
  * The console glue and run loop are adapted from TinyEMU's temu.c (MIT).
  *
- * Usage: tug [-m MB] [-a cmdline] [-d disk.img] [-b] <bbl.bin> <Image> [initrd.cpio.gz]
+ * Usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hp:gp] [-b] <bbl.bin> <Image> [initrd.cpio.gz]
  *   -m MB        guest RAM in MiB (default 256)
  *   -a cmdline   kernel command line (default "console=hvc0")
  *   -d disk.img  attach a raw image as virtio-block /dev/vda (persistent disk).
  *                For tug-embedded, defaults to "tug-data.img" next to the binary
  *                (or $TUG_DISK) when present; -d overrides; -d "" disables.
+ *   -L hp:gp     forward host 127.0.0.1:hp -> guest:gp (TCP; repeatable). e.g.
+ *                -L 2222:22 then `ssh -p 2222 root@127.0.0.1` (run `tug-sshd` in guest).
  *   -b           benchmark: report boot wall-time + peak RSS on exit (to stderr)
  */
 #include <stdio.h>
@@ -51,6 +53,11 @@ extern const unsigned char tug_bbl_start[],    tug_bbl_end[];
 extern const unsigned char tug_kernel_start[], tug_kernel_end[];
 extern const unsigned char tug_initrd_start[], tug_initrd_end[];
 #endif
+
+/* -L host_port:guest_port TCP forwards (applied to slirp in slirp_open). */
+#define TUG_MAX_FWD 8
+static struct { int hport, gport; } tug_fwds[TUG_MAX_FWD];
+static int tug_nfwd;
 
 /* ----------------------------------------------------------- block device */
 /* A read/write file-backed virtio-block device. temu.c has an equivalent, but
@@ -373,6 +380,23 @@ static EthernetDevice *slirp_open(void)
     net->write_packet = slirp_write_packet;
     net->select_fill  = slirp_select_fill1;
     net->select_poll  = slirp_select_poll1;
+
+    /* -L host_port:guest_port TCP forwards (e.g. 2222:22 for ssh to dropbear).
+     * Bound to 127.0.0.1 only — these never listen on the network. */
+    {
+        struct in_addr guest = { .s_addr = htonl(0x0a00020f) }; /* 10.0.2.15 */
+        struct in_addr lo    = { .s_addr = htonl(0x7f000001) }; /* 127.0.0.1  */
+        int i;
+        for (i = 0; i < tug_nfwd; i++) {
+            if (slirp_add_hostfwd(slirp_state, 0, lo, tug_fwds[i].hport,
+                                  guest, tug_fwds[i].gport) < 0)
+                fprintf(stderr, "tug: could not forward 127.0.0.1:%d -> guest:%d "
+                        "(port in use?)\n", tug_fwds[i].hport, tug_fwds[i].gport);
+            else
+                fprintf(stderr, "tug: forwarding 127.0.0.1:%d -> guest:%d\n",
+                        tug_fwds[i].hport, tug_fwds[i].gport);
+        }
+    }
     return net;
 }
 #endif /* CONFIG_SLIRP */
@@ -473,14 +497,27 @@ int main(int argc, char **argv)
     BOOL benchmark = FALSE;
     int c, len;
 
-    while ((c = getopt(argc, argv, "m:a:d:b")) != -1) {
+    while ((c = getopt(argc, argv, "m:a:d:L:b")) != -1) {
         switch (c) {
         case 'm': ram_mb = strtoull(optarg, NULL, 0); break;
         case 'a': cmdline = optarg; break;
         case 'd': disk_path = optarg; disk_explicit = TRUE; break;
+        case 'L': {  /* host_port:guest_port TCP forward (e.g. 2222:22 for ssh) */
+            int hp = 0, gp = 0;
+            if (sscanf(optarg, "%d:%d", &hp, &gp) == 2 && hp > 0 && gp > 0
+                && tug_nfwd < TUG_MAX_FWD) {
+                tug_fwds[tug_nfwd].hport = hp;
+                tug_fwds[tug_nfwd].gport = gp;
+                tug_nfwd++;
+            } else {
+                fprintf(stderr, "tug: bad -L '%s' (want hostport:guestport)\n", optarg);
+                return 1;
+            }
+            break;
+        }
         case 'b': benchmark = TRUE; break;
         default:
-            fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-b] bbl.bin Image [initrd]\n");
+            fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-b] bbl.bin Image [initrd]\n");
             return 1;
         }
     }
@@ -509,7 +546,7 @@ int main(int argc, char **argv)
             p->files[VM_FILE_INITRD].len = len;
         }
     } else {
-        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-b] bbl.bin Image [initrd]\n");
+        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-b] bbl.bin Image [initrd]\n");
         return 1;
     }
     vm_add_cmdline(p, cmdline);
