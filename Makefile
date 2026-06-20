@@ -90,7 +90,7 @@ MKE2FS  := mke2fs
 endif
 
 .PHONY: help deps vendors build smoke boot \
-        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator embed bash kernel \
+        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator embed bash curl kernel \
         clean distclean
 
 help:
@@ -115,6 +115,7 @@ help:
 	@echo "  make orchestrator  build ./tug, the standalone programmatic emulator"
 	@echo "  make embed      build ./tug-embedded, self-contained (payload baked in)"
 	@echo "  make bash       cross-build static riscv64 bash for the guest shell"
+	@echo "  make curl       cross-build static riscv64 curl+mbedTLS (HTTPS) + CA bundle"
 	@echo "  make kernel     (deferred) notes on building our own kernel"
 	@echo
 	@echo "  make clean / distclean"
@@ -227,7 +228,7 @@ bootfs: $(TEMU) $(EXT2) $(IMAGE_DIR)/$(CFG)
 # an interactive shell with config/tug-init. `make boot6 MODE=test` to assert.
 MODE ?= interactive
 boot6: $(TEMU) $(INITRAMFS) $(IMAGE_DIR)/$(CFG)
-	@TUG_BASH="$(CURDIR)/$(BASH_BIN)" bash scripts/boot6.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)" \
+	@TUG_BASH="$(CURDIR)/$(BASH_BIN)" TUG_CURL="$(CURDIR)/$(CURL_BIN)" TUG_CACERT="$(CURDIR)/$(CACERT)" bash scripts/boot6.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)" \
 	  "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" $(MODE)
 
 # Phase 2: a standalone pure-C orchestrator (src/tug.c) that drives the TinyEMU
@@ -247,6 +248,8 @@ $(TUG_BIN): src/tug.c $(TEMU)
 KERNEL6      := $(IMAGE_DIR)/Image-c2w
 BBL_BIN      := $(IMAGE_DIR)/bbl64.bin
 BASH_BIN     := $(VENDOR)/bash-5.2/bash
+CURL_BIN     := $(VENDOR)/curl-build/curl/src/curl
+CACERT       := $(VENDOR)/curl-build/cacert.pem
 EMBED_BIN    := tug-embedded
 EMBED_INITRD := generated/tug-embed.cpio.gz
 EMBED_S      := generated/payload.s
@@ -257,10 +260,16 @@ bash: $(BASH_BIN)
 $(BASH_BIN): $(TC_GCC)
 	bash scripts/build-bash.sh "$(TC)" "$(CURDIR)/$(VENDOR)"
 
+# curl + libcurl (mbedTLS, HTTPS) static for the guest, + Mozilla CA bundle.
+curl: $(CURL_BIN)
+$(CURL_BIN): $(TC_GCC)
+	bash scripts/build-curl.sh "$(TC)" "$(CURDIR)/$(VENDOR)"
+
 embed: $(EMBED_BIN)
-$(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init $(BASH_BIN)
+$(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init $(BASH_BIN) $(CURL_BIN)
 	@mkdir -p generated
-	TUG_BASH="$(CURDIR)/$(BASH_BIN)" bash scripts/embed-gen.sh "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" \
+	TUG_BASH="$(CURDIR)/$(BASH_BIN)" TUG_CURL="$(CURDIR)/$(CURL_BIN)" TUG_CACERT="$(CURDIR)/$(CACERT)" \
+	  bash scripts/embed-gen.sh "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" \
 	  "$(CURDIR)/$(BBL_BIN)" "$(CURDIR)/$(KERNEL6)" "$(CURDIR)/$(EMBED_INITRD)" "$(CURDIR)/$(EMBED_S)"
 	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -DTUG_EMBEDDED -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
 	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c $(EMBED_S) \

@@ -29,6 +29,12 @@ chmod -R u+w "$WORK"
 if [ -n "${TUG_BASH:-}" ] && [ -f "$TUG_BASH" ]; then
     cp "$TUG_BASH" "$WORK"/usr/bin/bash && chmod 755 "$WORK"/usr/bin/bash
 fi
+if [ -n "${TUG_CURL:-}" ] && [ -f "$TUG_CURL" ]; then
+    cp "$TUG_CURL" "$WORK"/usr/bin/curl && chmod 755 "$WORK"/usr/bin/curl
+fi
+if [ -n "${TUG_CACERT:-}" ] && [ -f "$TUG_CACERT" ]; then
+    mkdir -p "$WORK"/etc/ssl/certs && cp "$TUG_CACERT" "$WORK"/etc/ssl/certs/ca-certificates.crt
+fi
 if [ "$MODE" = test ]; then
     cat > "$WORK"/init <<'EOF'
 #!/bin/sh

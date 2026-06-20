@@ -1,0 +1,25 @@
+--- a/riscv_machine.c
++++ b/riscv_machine.c
+@@ -732,7 +732,21 @@
+         fdt_prop_tab_u64(s, "linux,initrd-start", initrd_start);
+         fdt_prop_tab_u64(s, "linux,initrd-end", initrd_start + initrd_size);
+     }
+-    
++    /* rng-seed: TinyEMU has no RNG device and its deterministic timing keeps the
++       kernel CRNG from self-seeding, so getrandom() (and thus any TLS) would block
++       forever. Seed the CRNG at boot from the host's randomness. */
++    {
++        uint8_t rng_seed[64];
++        FILE *rf = fopen("/dev/urandom", "rb");
++        int i;
++        for (i = 0; i < (int)sizeof(rng_seed); i++)
++            rng_seed[i] = i * 131 + 17; /* fallback if /dev/urandom is unavailable */
++        if (rf) {
++            if (fread(rng_seed, 1, sizeof(rng_seed), rf) != sizeof(rng_seed)) { /* keep fallback */ }
++            fclose(rf);
++        }
++        fdt_prop(s, "rng-seed", rng_seed, sizeof(rng_seed));
++    }
+ 
+     fdt_end_node(s); /* chosen */
+     
