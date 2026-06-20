@@ -85,3 +85,51 @@ is permitted. Agent-generated in-guest code still flows through the interpreter.
 1. virtio-block backed by a raw/memory-mapped image.
 2. virtio-net bridged to the host stack.
 3. Validate that guest execution never breaches the host process sandbox.
+
+---
+
+## 5. Long-Term Targets (forward-looking)
+
+The end goal is an on-device developer sandbox: a real Linux where heavy
+toolchains are **downloaded and installed on demand** (SSD is abundant), not
+shipped in the app bundle. Targets: latest **Python + pip**, **Node.js + npm**
+(JavaScript/TypeScript), **LLVM/clang C++**, and **Rust (rustc + cargo)**.
+
+### 5.1 Feasibility
+
+Doable in principle: each is ordinary `riscv64-linux` userland with upstream/
+distro builds (Debian, Alpine). Our guest is a real Linux kernel + userspace, so
+"if a riscv64 build exists, it runs." Storage is not a constraint; RAM up to
+~1 GB covers all of it except possibly heavy LTO link steps. The only real
+constraint is **execution speed**, not feasibility.
+
+### 5.2 Performance guesstimates (pure interpreter, current baseline)
+
+Relative to native; today's interpreter is the floor, JIT/AOT (open platforms)
+and Phase-3 extensions are the ceiling.
+
+| Workload                         | Rough slowdown | Felt experience |
+|----------------------------------|---------------:|-----------------|
+| Python / Node runtime, JS/TS     | ~10–30×        | usable; scripts fine, `pip`/`npm install` slow |
+| clang/C++ compile, rustc/cargo   | ~20–50×        | works but painful; a 5 s native build → minutes |
+| I/O-bound (download, unpack)     | ~1–3×          | near-native (host-backed) |
+
+These are order-of-magnitude estimates to be replaced by real measurements once
+Phase 3 has a benchmark. The compile-bound cases are exactly what the perf
+extensions and the open-platform JIT/AOT path must rescue.
+
+### 5.3 Networking (near-term)
+
+Simplest viable path: **slirp user-mode NAT** (already in TinyEMU; just not linked
+into `tug` yet). No host privileges, no tap/bridge — guest gets `10.0.2.x`, NAT to
+the host's stack for outbound Internet, which `pip`/`npm`/`cargo` need. virtio-net
+on 6.x requires `virtio_net.napi_tx=false` (see `docs/kernel.md`). This is the
+near-term enabler for on-demand toolchain install.
+
+### 5.4 macOS as an iOS performance proxy
+
+Per-core throughput on an Apple-Silicon Mac approximates a modern iOS device
+within single-digit percent, so **interpreter-speed numbers transfer**. Caveat:
+macOS *permits* JIT and iOS does not — so any JIT/codegen wins measured on macOS
+will **not** exist on locked iOS. The honest iOS proxy is the **pure-interpreter**
+number; treat JIT results as the open-platform (macOS/Linux/Windows) tier only.
