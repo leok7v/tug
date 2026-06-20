@@ -8,9 +8,12 @@
  *
  * The console glue and run loop are adapted from TinyEMU's temu.c (MIT).
  *
- * Usage: tug [-m MB] [-a cmdline] [-b] <bbl.bin> <Image> [initrd.cpio.gz]
+ * Usage: tug [-m MB] [-a cmdline] [-d disk.img] [-b] <bbl.bin> <Image> [initrd.cpio.gz]
  *   -m MB        guest RAM in MiB (default 256)
  *   -a cmdline   kernel command line (default "console=hvc0")
+ *   -d disk.img  attach a raw image as virtio-block /dev/vda (persistent disk).
+ *                For tug-embedded, defaults to "tug-data.img" next to the binary
+ *                (or $TUG_DISK) when present; -d overrides; -d "" disables.
  *   -b           benchmark: report boot wall-time + peak RSS on exit (to stderr)
  */
 #include <stdio.h>
@@ -27,6 +30,11 @@
 #include <sys/resource.h>
 #include <signal.h>
 #include <netinet/in.h>
+#if defined(__APPLE__)
+/* declared rather than #include <mach-o/dyld.h>: that header defines its own
+ * enum FALSE/TRUE which collides with TinyEMU's cutils.h BOOL enum. */
+int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
+#endif
 
 #include "cutils.h"
 #include "iomem.h"
@@ -42,6 +50,78 @@ extern const unsigned char tug_bbl_start[],    tug_bbl_end[];
 extern const unsigned char tug_kernel_start[], tug_kernel_end[];
 extern const unsigned char tug_initrd_start[], tug_initrd_end[];
 #endif
+
+/* ----------------------------------------------------------- block device */
+/* A read/write file-backed virtio-block device. temu.c has an equivalent, but
+ * it is `static` there and temu.o is excluded from this link, so tug carries
+ * its own minimal implementation (synchronous read/write, no snapshot). This
+ * backs the persistent /dev/vda data disk that holds the Alpine apk userland. */
+
+#define TUG_SECTOR_SIZE 512
+
+typedef struct {
+    FILE *f;
+    int64_t nb_sectors;
+} TugBlockFile;
+
+static int64_t tug_bf_get_sector_count(BlockDevice *bs)
+{
+    TugBlockFile *bf = bs->opaque;
+    return bf->nb_sectors;
+}
+
+static int tug_bf_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf,
+                             int n, BlockDeviceCompletionFunc *cb, void *opaque)
+{
+    TugBlockFile *bf = bs->opaque;
+    if (!bf->f)
+        return -1;
+    fseeko(bf->f, (off_t)sector_num * TUG_SECTOR_SIZE, SEEK_SET);
+    if (fread(buf, 1, (size_t)n * TUG_SECTOR_SIZE, bf->f) != (size_t)n * TUG_SECTOR_SIZE) {
+        /* reads past EOF of a sparse file return zeros, not an error */
+    }
+    return 0; /* synchronous */
+}
+
+static int tug_bf_write_async(BlockDevice *bs, uint64_t sector_num,
+                              const uint8_t *buf, int n,
+                              BlockDeviceCompletionFunc *cb, void *opaque)
+{
+    TugBlockFile *bf = bs->opaque;
+    if (!bf->f)
+        return -1;
+    fseeko(bf->f, (off_t)sector_num * TUG_SECTOR_SIZE, SEEK_SET);
+    fwrite(buf, 1, (size_t)n * TUG_SECTOR_SIZE, bf->f);
+    fflush(bf->f);
+    return 0; /* synchronous */
+}
+
+static BlockDevice *tug_block_device_init(const char *filename)
+{
+    BlockDevice *bs;
+    TugBlockFile *bf;
+    FILE *f;
+    int64_t file_size;
+
+    f = fopen(filename, "r+b");
+    if (!f) {
+        fprintf(stderr, "tug: cannot open data disk %s: %s\n",
+                filename, strerror(errno));
+        return NULL;
+    }
+    fseeko(f, 0, SEEK_END);
+    file_size = ftello(f);
+
+    bs = mallocz(sizeof(*bs));
+    bf = mallocz(sizeof(*bf));
+    bf->f = f;
+    bf->nb_sectors = file_size / TUG_SECTOR_SIZE;
+    bs->opaque = bf;
+    bs->get_sector_count = tug_bf_get_sector_count;
+    bs->read_async = tug_bf_read_async;
+    bs->write_async = tug_bf_write_async;
+    return bs;
+}
 
 /* ------------------------------------------------------------------ console */
 
@@ -351,17 +431,20 @@ int main(int argc, char **argv)
     VirtMachineParams params, *p = &params;
     VirtMachine *s;
     const char *cmdline = "console=hvc0 virtio_net.napi_tx=false";
+    const char *disk_path = NULL;   /* -d: explicit data disk image */
+    BOOL disk_explicit = FALSE;     /* whether -d was given (even as "") */
     uint64_t ram_mb = 256;
     BOOL benchmark = FALSE;
     int c, len;
 
-    while ((c = getopt(argc, argv, "m:a:b")) != -1) {
+    while ((c = getopt(argc, argv, "m:a:d:b")) != -1) {
         switch (c) {
         case 'm': ram_mb = strtoull(optarg, NULL, 0); break;
         case 'a': cmdline = optarg; break;
+        case 'd': disk_path = optarg; disk_explicit = TRUE; break;
         case 'b': benchmark = TRUE; break;
         default:
-            fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-b] bbl.bin Image [initrd]\n");
+            fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-b] bbl.bin Image [initrd]\n");
             return 1;
         }
     }
@@ -405,6 +488,53 @@ int main(int argc, char **argv)
     p->tab_eth[0].net = slirp_open();
     p->eth_count = p->tab_eth[0].net ? 1 : 0;
 #endif
+
+    /* Persistent data disk -> virtio-block /dev/vda. Explicit -d wins; for
+     * tug-embedded, fall back to $TUG_DISK or "tug-data.img" beside the binary
+     * when it exists (so the self-contained build stays zero-arg yet picks up a
+     * persistent disk if the user created one). -d "" disables. */
+    {
+        char default_disk[4096];
+        const char *use_disk = NULL;
+        if (disk_explicit) {
+            use_disk = (disk_path && disk_path[0]) ? disk_path : NULL;
+        } else {
+#ifdef TUG_EMBEDDED
+            const char *env = getenv("TUG_DISK");
+            if (env && env[0]) {
+                use_disk = env;
+            } else {
+                /* tug-data.img next to the executable */
+                char exe[4096];
+                ssize_t n = -1;
+#if defined(__APPLE__)
+                uint32_t sz = sizeof(exe);
+                if (_NSGetExecutablePath(exe, &sz) == 0) n = (ssize_t)strlen(exe);
+#else
+                n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+                if (n > 0) exe[n] = '\0';
+#endif
+                if (n > 0) {
+                    char *slash = strrchr(exe, '/');
+                    size_t dirlen = slash ? (size_t)(slash - exe + 1) : 0;
+                    snprintf(default_disk, sizeof(default_disk),
+                             "%.*stug-data.img", (int)dirlen, exe);
+                    if (access(default_disk, F_OK) == 0)
+                        use_disk = default_disk;
+                }
+            }
+#endif
+        }
+        if (use_disk) {
+            BlockDevice *blk = tug_block_device_init(use_disk);
+            if (blk) {
+                p->tab_drive[0].block_dev = blk;
+                p->drive_count = 1;
+            } else {
+                return 1;
+            }
+        }
+    }
 
     if (benchmark) {
         clock_gettime(CLOCK_MONOTONIC, &t_start);

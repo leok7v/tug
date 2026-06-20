@@ -35,6 +35,14 @@ if [ -n "${TUG_BUSYBOX:-}" ] && [ -f "$TUG_BUSYBOX" ]; then
     rm -f "$W"/usr/bin/busybox && cp "$TUG_BUSYBOX" "$W"/usr/bin/busybox && chmod 755 "$W"/usr/bin/busybox
     rm -f "$W"/usr/bin/vi && ln -s busybox "$W"/usr/bin/vi  # solid vi (toybox vi is buggy)
 fi
+# apk variant: carry the Alpine seed tarball + CA bundle inside the initramfs so
+# the embedded binary first-boot-seeds /dev/vda with no network (tug-apk-init
+# extracts /tug/alpine-minirootfs.tar.gz). Only when TUG_ALPINE_SEED is set.
+if [ -n "${TUG_ALPINE_SEED:-}" ] && [ -f "$TUG_ALPINE_SEED" ]; then
+    mkdir -p "$W"/tug
+    cp "$TUG_ALPINE_SEED" "$W"/tug/alpine-minirootfs.tar.gz
+    [ -n "${TUG_CACERT:-}" ] && [ -f "$TUG_CACERT" ] && cp "$TUG_CACERT" "$W"/tug/cacert.pem
+fi
 ( cd "$W" && find . | cpio -o -H newc -R +0:+0 2>/dev/null | gzip ) > "$OUT_CPIO"
 
 # Mach-O assembly: bake the three blobs into the read-only const section.
