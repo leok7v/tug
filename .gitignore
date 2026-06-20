@@ -1,0 +1,3 @@
+# Third-party downloads + extracted sources + build artifacts.
+# Everything here is reproducible via `make vendors && make build`.
+/vendors/
