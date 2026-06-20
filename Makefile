@@ -236,9 +236,9 @@ boot6: $(TEMU) $(INITRAMFS) $(IMAGE_DIR)/$(CFG)
 TUG_BIN := tug
 orchestrator: $(TUG_BIN)
 $(TUG_BIN): src/tug.c $(TEMU)
-	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
+	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -g -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
 	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c \
-	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TEMU_LIBS) -o $@
+	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TINYEMU_DIR)/slirp/*.o $(TEMU_LIBS) -o $@
 	@echo "built orchestrator: $@  (./tug -b <bbl> <Image> [initrd] to benchmark)"
 
 # Self-contained build: bake bios + our 6.x kernel + an interactive rootfs into
@@ -253,9 +253,9 @@ $(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init
 	@mkdir -p generated
 	bash scripts/embed-gen.sh "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" \
 	  "$(CURDIR)/$(BBL_BIN)" "$(CURDIR)/$(KERNEL6)" "$(CURDIR)/$(EMBED_INITRD)" "$(CURDIR)/$(EMBED_S)"
-	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -DTUG_EMBEDDED -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
+	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -DTUG_EMBEDDED -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
 	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c $(EMBED_S) \
-	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TEMU_LIBS) -o $@
+	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TINYEMU_DIR)/slirp/*.o $(TEMU_LIBS) -o $@
 	@echo "built self-contained $@ (`du -h $@ | cut -f1`) — run: ./$@  (no args)"
 
 kernel:

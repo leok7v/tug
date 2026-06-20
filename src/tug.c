@@ -26,11 +26,15 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 #include <signal.h>
+#include <netinet/in.h>
 
 #include "cutils.h"
 #include "iomem.h"
 #include "virtio.h"
 #include "machine.h"
+#ifdef CONFIG_SLIRP
+#include "slirp/libslirp.h"
+#endif
 
 #ifdef TUG_EMBEDDED
 /* payload baked into the binary by generated/payload.s (.incbin) */
@@ -168,6 +172,55 @@ static CharacterDevice *console_init(BOOL allow_ctrlc)
     return dev;
 }
 
+/* --------------------------------------------------------------- slirp NAT */
+#ifdef CONFIG_SLIRP
+static Slirp *slirp_state;
+
+static void slirp_write_packet(EthernetDevice *net, const uint8_t *buf, int len)
+{
+    slirp_input(net->opaque, buf, len);
+}
+/* called back by the slirp library — must be external symbols */
+int slirp_can_output(void *opaque)
+{
+    EthernetDevice *net = opaque;
+    return net->device_can_write_packet(net);
+}
+void slirp_output(void *opaque, const uint8_t *pkt, int pkt_len)
+{
+    EthernetDevice *net = opaque;
+    net->device_write_packet(net, pkt, pkt_len);
+}
+static void slirp_select_fill1(EthernetDevice *net, int *pfd_max,
+                               fd_set *rfds, fd_set *wfds, fd_set *efds, int *pdelay)
+{
+    slirp_select_fill(net->opaque, pfd_max, rfds, wfds, efds);
+}
+static void slirp_select_poll1(EthernetDevice *net,
+                               fd_set *rfds, fd_set *wfds, fd_set *efds, int select_ret)
+{
+    slirp_select_poll(net->opaque, rfds, wfds, efds, (select_ret <= 0));
+}
+/* user-mode NAT: guest 10.0.2.15, gateway/host 10.0.2.2, DNS 10.0.2.3 */
+static EthernetDevice *slirp_open(void)
+{
+    EthernetDevice *net = mallocz(sizeof(*net));
+    struct in_addr net_addr = { .s_addr = htonl(0x0a000200) };
+    struct in_addr mask     = { .s_addr = htonl(0xffffff00) };
+    struct in_addr host     = { .s_addr = htonl(0x0a000202) };
+    struct in_addr dhcp     = { .s_addr = htonl(0x0a00020f) };
+    struct in_addr dns      = { .s_addr = htonl(0x0a000203) };
+    slirp_state = slirp_init(0, net_addr, mask, host, NULL, "", NULL, dhcp, dns, net);
+    net->mac_addr[0] = 0x02; net->mac_addr[1] = 0x00; net->mac_addr[2] = 0x00;
+    net->mac_addr[3] = 0x00; net->mac_addr[4] = 0x00; net->mac_addr[5] = 0x01;
+    net->opaque = slirp_state;
+    net->write_packet = slirp_write_packet;
+    net->select_fill  = slirp_select_fill1;
+    net->select_poll  = slirp_select_poll1;
+    return net;
+}
+#endif /* CONFIG_SLIRP */
+
 /* ------------------------------------------------------------------ run loop */
 
 #define MAX_EXEC_CYCLE  500000
@@ -194,9 +247,17 @@ static void tug_run(VirtMachine *m)
             s->resize_pending = FALSE;
         }
     }
+#ifdef CONFIG_SLIRP
+    if (m->net)
+        m->net->select_fill(m->net, &fd_max, &rfds, &wfds, &efds, &delay);
+#endif
     tv.tv_sec = delay / 1000;
     tv.tv_usec = (delay % 1000) * 1000;
     ret = select(fd_max + 1, &rfds, &wfds, &efds, &tv);
+#ifdef CONFIG_SLIRP
+    if (m->net)
+        m->net->select_poll(m->net, &rfds, &wfds, &efds, ret);
+#endif
     if (ret > 0 && m->console_dev && FD_ISSET(stdin_fd, &rfds)) {
         uint8_t buf[128];
         int len = virtio_console_get_write_len(m->console_dev);
@@ -249,7 +310,7 @@ int main(int argc, char **argv)
 {
     VirtMachineParams params, *p = &params;
     VirtMachine *s;
-    const char *cmdline = "console=hvc0";
+    const char *cmdline = "console=hvc0 virtio_net.napi_tx=false";
     uint64_t ram_mb = 256;
     BOOL benchmark = FALSE;
     int c, len;
@@ -295,6 +356,13 @@ int main(int argc, char **argv)
     vm_add_cmdline(p, cmdline);
     p->console = console_init(TRUE);
 
+#ifdef CONFIG_SLIRP
+    /* user-mode NAT: guest reaches the Internet via the host, no privileges */
+    p->tab_eth[0].driver = strdup("user");
+    p->tab_eth[0].net = slirp_open();
+    p->eth_count = p->tab_eth[0].net ? 1 : 0;
+#endif
+
     if (benchmark) {
         clock_gettime(CLOCK_MONOTONIC, &t_start);
         atexit(report_stats);
@@ -302,6 +370,8 @@ int main(int argc, char **argv)
 
     s = virt_machine_init(p);
     if (!s) { fprintf(stderr, "tug: virt_machine_init failed\n"); return 1; }
+    if (s->net)
+        s->net->device_set_carrier(s->net, TRUE);
 
     for (;;)
         tug_run(s);
