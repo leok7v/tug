@@ -8,3 +8,9 @@
 /generated/
 /tug-embedded
 /tug-embedded.dSYM/
+/tug-embedded-apk
+/tug-embedded-apk.dSYM/
+
+# persistent Alpine data disk (large; created by `make disk`)
+/tug-data.img
+*.img

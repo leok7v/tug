@@ -1,0 +1,132 @@
+#!/bin/sh
+# tug apk-init (pid 1) — runs from the toybox initramfs. Mounts the persistent
+# /dev/vda data disk, first-boot-seeds it from the baked Alpine minirootfs, sets
+# up networking + DNS + CA bundle, then switch_roots into Alpine so `apk` works
+# and persists. Falls back to an initramfs toybox shell if the disk is missing.
+#
+# Self-contained: the Alpine seed tarball (/tug/alpine-minirootfs.tar.gz) and the
+# CA bundle (/tug/cacert.pem) are carried in this same initramfs by apkboot.sh /
+# embed-gen.sh, so first boot needs no network.
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin TERM=vt100
+
+mountpoint -q /dev  || mount -t devtmpfs dev  /dev  2>/dev/null
+mountpoint -q /proc || mount -t proc     proc /proc 2>/dev/null
+mountpoint -q /sys  || mount -t sysfs    sys  /sys  2>/dev/null
+
+NEWROOT=/mnt
+SEED=/tug/alpine-minirootfs.tar.gz
+CACERT=/tug/cacert.pem
+
+# --- mount the persistent data disk ----------------------------------------
+mkdir -p "$NEWROOT"
+# Verify the mount via /proc/mounts, NOT the mount command's exit status: toybox
+# `mount` can return non-zero even when the kernel mounted the fs (notably right
+# after an ext4 journal recovery from an unclean shutdown), which would wrongly
+# drop us to the fallback shell with the disk actually mounted.
+if [ -b /dev/vda ]; then
+    mount -t ext4 /dev/vda "$NEWROOT" 2>/dev/null
+    grep -q " $NEWROOT " /proc/mounts 2>/dev/null || mount /dev/vda "$NEWROOT" 2>/dev/null
+fi
+if ! grep -q " $NEWROOT " /proc/mounts 2>/dev/null; then
+    echo
+    echo "  tug: no writable /dev/vda data disk — apk persistence unavailable."
+    echo "       create one on the host with:  make disk"
+    echo "       dropping to the initramfs toybox shell."
+    echo
+    SH=/bin/sh; [ -x /bin/bash ] && SH=/bin/bash
+    setsid -c <>/dev/console >&0 2>&1 "$SH"
+    poweroff -f
+fi
+
+# --- first-boot seed --------------------------------------------------------
+# Gate on a sentinel written ONLY after tar fully succeeds, not on the presence
+# of /sbin/apk: tar extracts in archive order, so a first boot interrupted after
+# sbin/apk lands but before the rest would otherwise look "seeded" on the next
+# boot and switch_root into a half-extracted, broken Alpine.
+SEEDED="$NEWROOT/.tug-seeded"
+if [ ! -f "$SEEDED" ] && [ -x "$NEWROOT/sbin/apk" ]; then
+    # Legacy disk seeded before the sentinel existed (a complete Alpine is
+    # already present): adopt it in place, don't re-seed or wipe.
+    : > "$SEEDED"
+fi
+if [ ! -f "$SEEDED" ]; then
+    echo
+    echo "  tug: first boot — seeding Alpine userland onto /dev/vda ..."
+    if [ ! -f "$SEED" ]; then
+        echo "  tug: ERROR — Alpine seed $SEED missing from initramfs."
+        setsid -c <>/dev/console >&0 2>&1 /bin/sh; poweroff -f
+    fi
+    # Clear any partial remains from a previously-interrupted seed, then extract.
+    rm -rf "$NEWROOT"/* 2>/dev/null
+    if ( cd "$NEWROOT" && tar xpf "$SEED" ) && sync; then
+        : > "$SEEDED"            # mark complete only after a clean extraction
+    else
+        echo "  tug: ERROR extracting Alpine seed — falling back to toybox shell."
+        setsid -c <>/dev/console >&0 2>&1 /bin/sh; poweroff -f
+    fi
+
+    # DNS resolver (slirp) + CA bundle for HTTPS apk repositories
+    echo 'nameserver 10.0.2.3' > "$NEWROOT/etc/resolv.conf"
+    mkdir -p "$NEWROOT/etc/ssl/certs"
+    [ -f "$CACERT" ] && cp "$CACERT" "$NEWROOT/etc/ssl/certs/ca-certificates.crt"
+
+    # /etc/apk/repositories ships in the minirootfs (main+community for this
+    # release); leave it as-is. Ensure /etc/apk/keys came across.
+    [ -d "$NEWROOT/etc/apk/keys" ] || echo "  tug: WARNING /etc/apk/keys missing"
+    echo "  tug: Alpine seeded. apk userland is now persistent on /dev/vda."
+fi
+
+# --- login shell + welcome banner (idempotent, every boot) ------------------
+# Created here rather than only inside the first-boot seed block so a disk that
+# was populated by something other than this init (e.g. the apkboot test
+# harness, or a future re-seed) still gets a /sbin/tug-login for switch_root to
+# exec. Cheap to rewrite each boot.
+cat > "$NEWROOT/etc/profile.d/tug.sh" <<'BANNER'
+# tug welcome banner
+if [ -t 0 ]; then
+  echo
+  echo "  tug — Alpine $(. /etc/os-release 2>/dev/null; echo "$VERSION_ID") riscv64 on TinyEMU"
+  echo "  packages: apk update && apk add <pkg>   e.g.  build-base binutils gcc clang  nodejs npm  python3 py3-pip  cargo"
+  echo "  storage:  persistent /  on /dev/vda ($(df -h / 2>/dev/null | awk 'NR==2{print $2}'))   scratch: /tmp"
+  echo "  keys:     Ctrl-C -> guest;  Ctrl-C x3 then again -> quit tug;  poweroff -> shutdown"
+  echo
+fi
+BANNER
+# tug login shell: prefer bash if installed (apk add bash), else ash.
+cat > "$NEWROOT/sbin/tug-login" <<'LOGIN'
+#!/bin/sh
+export HOME=/root TERM=vt100 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+cd /root 2>/dev/null || cd /
+SH=/bin/ash; [ -x /bin/bash ] && SH=/bin/bash
+export SHELL="$SH"
+exec setsid -c <>/dev/console >&0 2>&1 "$SH" -l
+LOGIN
+chmod +x "$NEWROOT/sbin/tug-login"
+
+# --- always-refresh runtime bits (cheap; keeps DNS/CA correct) --------------
+echo 'nameserver 10.0.2.3' > "$NEWROOT/etc/resolv.conf" 2>/dev/null
+[ -f "$CACERT" ] && [ -d "$NEWROOT/etc/ssl/certs" ] && \
+    cp "$CACERT" "$NEWROOT/etc/ssl/certs/ca-certificates.crt" 2>/dev/null
+# (disk size in the banner is computed at login time inside Alpine, where
+#  `df -h` is available and accurate — see the banner above.)
+
+# --- networking: slirp NAT (guest 10.0.2.15, gw 10.0.2.2, DNS 10.0.2.3) -----
+ifconfig lo   127.0.0.1 up        2>/dev/null
+ifconfig eth0 10.0.2.15 up        2>/dev/null
+route add default gw 10.0.2.2     2>/dev/null
+echo '0 2147483647' > /proc/sys/net/ipv4/ping_group_range 2>/dev/null
+
+# --- switch into the persistent Alpine root ---------------------------------
+# Move the pseudo-filesystems we already mounted into the new root, then hand
+# pid 1 over to tug-login (interactive) inside Alpine.
+mkdir -p "$NEWROOT/dev" "$NEWROOT/proc" "$NEWROOT/sys" "$NEWROOT/tmp"
+mount --move /dev  "$NEWROOT/dev"  2>/dev/null || mount -t devtmpfs dev "$NEWROOT/dev" 2>/dev/null
+mount --move /proc "$NEWROOT/proc" 2>/dev/null
+mount --move /sys  "$NEWROOT/sys"  2>/dev/null
+mount -t tmpfs tmpfs "$NEWROOT/tmp" 2>/dev/null
+
+exec switch_root "$NEWROOT" /sbin/tug-login
+# if switch_root failed, don't leave pid1 dead
+echo "tug: switch_root failed; dropping to toybox shell"
+setsid -c <>/dev/console >&0 2>&1 /bin/sh
+poweroff -f

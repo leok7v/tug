@@ -121,15 +121,57 @@ make embed                # -> ./tug-embedded (~5 MB, payload baked in)
 ./tug-embedded            # boots our 6.1 Linux to a shell, from anywhere, no args
 ```
 
+### Phase 4 — persistent Alpine userland with `apk` ✅
+
+The toybox guest above is read-only and ephemeral. For an installable, persistent
+userland we vendor the **Alpine 3.24 riscv64 minirootfs** and a **persistent ext4
+data disk**, so inside the guest you can:
+
+```sh
+apk update && apk add bash clang nodejs npm python3 py3-pip cargo
+```
+
+…and it **persists across runs**, with room for agents to build code and use `/tmp`.
+
+```sh
+make alpine               # vendor the Alpine minirootfs (apk seed), sha256-checked
+make disk                 # create tug-data.img — a sparse 32G ext4 disk (~13M on host)
+                          #   override size: make disk DISK_SIZE=64G
+                          #   (forcing a rebuild ERASES tug-data.img and its contents)
+make apkboot              # boot it interactively; first run seeds /dev/vda from the
+                          #   baked Alpine seed, then switch_roots into Alpine
+make apkboot MODE=test    # non-interactive: assert mount + seed + apk + (slow) update
+```
+
+How it works: our 6.1 kernel already has `VIRTIO_BLK` + `EXT4` built in, so the
+data disk attaches as `/dev/vda` (no kernel rebuild, no TinyEMU patch — the
+orchestrator drives the existing block-device API). A toybox initramfs (`/init`
+= `config/tug-apk-init`) mounts `/dev/vda`, and on first boot extracts the Alpine
+tarball onto it, drops in DNS (`10.0.2.3`) + our CA bundle, then `switch_root`s
+into Alpine. `apk` then reaches `dl-cdn.alpinelinux.org` over the slirp NAT with
+TLS — verified: `apk update` pulls both main+community indexes and `apk add bash`
+installs and survives a reboot.
+
+Self-contained apk binary (Alpine seed baked in):
+```sh
+make embed-apk            # -> ./tug-embedded-apk (Alpine seed + apk-init inside)
+make disk && ./tug-embedded-apk   # auto-attaches ./tug-data.img (or $TUG_DISK / -d)
+```
+
+The disk attaches via `./tug -d tug-data.img …` for the plain orchestrator, or is
+auto-detected (`tug-data.img` beside the binary, or `$TUG_DISK`) for the embedded
+builds; `-d ""` disables it.
+
 ## Layout
 
 ```
 Makefile            download → toolchain → toybox/tcc → rootfs → ext2 → boot
-src/tug.c           standalone programmatic orchestrator (make orchestrator)
+src/tug.c           standalone programmatic orchestrator (+ virtio-blk data disk)
 config/tug-init     TinyEMU-appropriate pid-1 init for the full-system boot
+config/tug-apk-init pid-1 init that seeds + switch_roots into the Alpine apk disk
 compat/             macOS build shims (keep vendored source pristine)
 patches/            functional emulator patches (rdtime CSR), applied on extract
-scripts/            smoke.sh, bootfs.sh, boot6.sh — non-interactive boot assertions
+scripts/            smoke.sh, bootfs.sh, boot6.sh, apkboot.sh — boot assertions
 docs/kernel.md      reproducible "our 6.x kernel on TinyEMU" recipe
 vendors/            downloads + extracted sources + build (gitignored)
 ```

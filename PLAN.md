@@ -88,6 +88,38 @@ is permitted. Agent-generated in-guest code still flows through the interpreter.
 
 ---
 
+## 4a. Near-term priorities (do next)
+
+**[DONE] virtio-block write path: drop per-write `fflush`.**
+`tug_block_device_init` in `src/tug.c` previously used buffered stdio with an
+`fflush()` after *every* `write_async`. Random-access block IO defeats a stdio
+buffer (each `fseek` flushes it) and the forced flush made seeding the Alpine
+userland and `apk` crawl under the interpreter. Fixed: raw `pread`/`pwrite` into
+the host page cache (fast, durable across a normal exit), `fsync` once at exit.
+Considered `mmap(MAP_SHARED)` over the pre-sized image (read/write become pure
+memcpy, marginally faster) but rejected as the default: on our *sparse, growing*
+disk a host-disk-full condition would surface as **SIGBUS** (hard crash) during
+writeback, whereas `pwrite` returns a clean `-ENOSPC` the guest sees as an IO
+error. (`temu.c`'s backend, used only by `make apkboot`'s test, never had the
+per-write flush.)
+
+*mmap — deferred until much later, after everything else is optimized (lowest
+priority).* Options if revisited: (a) `mmap` + a SIGBUS handler, or
+preallocate/`fallocate` the whole image so writeback can't ENOSPC; or (b) a
+hybrid — `memcpy` into pages already faulted-in/allocated, `pwrite` for writes
+that land in new/hole positions so allocation failures stay recoverable. The
+hybrid avoids SIGBUS but is fiddly (tracking which regions are backed). The win
+over plain `pwrite` is only the per-IO syscall, which is negligible next to
+interpreter cost — so this is not worth its complexity until the interpreter
+itself is optimized (see §3).
+
+Follow-ups (lower): virtio-block **discard/TRIM** passthrough so deleting guest
+files punches holes and the sparse `tug.img` can shrink (today it only grows);
+and a host-side `make compact` that rebuilds the image to reclaim space until
+discard exists.
+
+---
+
 ## 5. Long-Term Targets (forward-looking)
 
 The end goal is an on-device developer sandbox: a real Linux where heavy
