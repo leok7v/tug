@@ -353,7 +353,18 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-b] bbl.bin Image [initrd]\n");
         return 1;
     }
-    vm_add_cmdline(p, cmdline);
+    /* TinyEMU has no RTC, so the guest wall clock starts at 1970 — TLS cert
+       checks then fail ("validity starts in the future"). Pass the host time on
+       the cmdline (toybox `date` set format) so tug-init can set the clock. */
+    {
+        char cmdbuf[1024], ts[32];
+        time_t now = time(NULL);
+        struct tm tmv;
+        gmtime_r(&now, &tmv);
+        strftime(ts, sizeof(ts), "%m%d%H%M%Y.%S", &tmv); /* MMDDhhmmCCYY.ss, UTC */
+        snprintf(cmdbuf, sizeof(cmdbuf), "%s tugdate=%s", cmdline, ts);
+        vm_add_cmdline(p, cmdbuf);
+    }
     p->console = console_init(TRUE);
 
 #ifdef CONFIG_SLIRP
