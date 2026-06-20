@@ -3,20 +3,34 @@
 # shell. Unlike mkroot's default init it does NOT run NTP (TinyEMU has no RTC,
 # so the guest clock is epoch 0 and `sntp` would block forever). Networking is
 # brought up non-blocking; the cmdline must include virtio_net.napi_tx=false.
-export HOME=/home PATH=/bin:/sbin
+#
+# Terminal: the host (Terminal.app etc.) IS the VT100/xterm emulator — tug passes
+# the guest's escape codes through and reports window size. We export TERM so apps
+# assume a real terminal. (A bundled terminfo DB / an in-app emulator for iOS are
+# noted in PLAN.md section 5.5.)
+export HOME=/home PATH=/bin:/sbin TERM=vt100 PS1='tug:\w\$ '
 
 mountpoint -q dev  || mount -t devtmpfs dev  /dev
 mountpoint -q proc || mount -t proc     proc /proc
 mountpoint -q sys  || mount -t sysfs    sys  /sys
 mkdir -p /dev/pts && { mountpoint -q dev/pts || mount -t devpts dev /dev/pts; }
 
-# Best-effort networking (no blocking NTP). slirp user-net gateway is 10.0.2.2.
-ifconfig lo   127.0.0.1   up        2>/dev/null
-ifconfig eth0 10.0.2.15   up        2>/dev/null
-route add default gw 10.0.2.2       2>/dev/null
+# Networking: slirp user-mode NAT (guest 10.0.2.15, gateway 10.0.2.2, DNS 10.0.2.3).
+# No blocking NTP. resolv.conf points at the slirp resolver so DNS works.
+ifconfig lo   127.0.0.1 up        2>/dev/null
+ifconfig eth0 10.0.2.15 up        2>/dev/null
+route add default gw 10.0.2.2     2>/dev/null
+echo 'nameserver 10.0.2.3' > /etc/resolv.conf 2>/dev/null
+echo '0 2147483647' > /proc/sys/net/ipv4/ping_group_range 2>/dev/null  # allow ping
 
-printf '\n=== tug: riscv64 Linux %s on TinyEMU — type "poweroff -f" to exit ===\n\n' "$(uname -r)"
+cat <<EOF
 
-# Give the shell a proper controlling terminal on the active console, then run it.
+  tug — riscv64 Linux $(uname -r) on TinyEMU
+  try:  uname -a   ls -l /   cat /proc/cpuinfo   ping -c2 8.8.8.8
+  exit: poweroff -f      (or Ctrl-a x to kill the emulator)
+
+EOF
+
+# Interactive shell with a proper controlling terminal on the active console.
 setsid -c <>/dev/"$(sed '$s@.*[ /]@@' /sys/class/tty/console/active)" >&0 2>&1 /bin/sh
 poweroff -f

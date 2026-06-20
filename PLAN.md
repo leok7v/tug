@@ -133,3 +133,18 @@ within single-digit percent, so **interpreter-speed numbers transfer**. Caveat:
 macOS *permits* JIT and iOS does not — so any JIT/codegen wins measured on macOS
 will **not** exist on locked iOS. The honest iOS proxy is the **pure-interpreter**
 number; treat JIT results as the open-platform (macOS/Linux/Windows) tier only.
+
+### 5.5 Terminal
+
+Manual sessions today rely on the **host terminal** (Terminal.app / iTerm) as the
+VT100/xterm emulator: `tug` passes the guest's escape codes straight through and
+reports window size; the guest exports `TERM=vt100`. That's enough for toybox
+(which emits ANSI directly) and any host-driven session. Forward work:
+
+- **Bundle a minimal terminfo DB** (vt100 / linux / xterm) in the rootfs so
+  ncurses/readline programs — python/node REPLs, vim, less — work fully. Deferred
+  until those toolchains land (§5.1); small footprint.
+- **In-app VT100 emulator inside `tug`** for **iOS**, where there is no host
+  terminal to render the guest's escapes: a libvterm-class state machine driving a
+  text-grid view (parse SGR/cursor/scroll, feed keyboard input). Real but bounded
+  code — the iOS counterpart to today's passthrough. Future.
