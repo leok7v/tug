@@ -49,7 +49,25 @@ typedef struct {
     int stdin_fd;
     int console_esc_state;
     BOOL resize_pending;
+    /* Ctrl-C escape: forward every ^C to the guest, but if the guest looks wedged
+     * (N consecutive ^C, nothing else typed, within a short window) offer to
+     * force-quit tug itself. A healthy guest gives a prompt back and the next
+     * keystroke resets the count, so normal interrupts never kill tug. */
+    int  ctrlc_count;
+    BOOL ctrlc_armed;
+    uint64_t ctrlc_last_ms;
 } STDIODevice;
+
+/* force-quit tug after this many consecutive ^C (the last one is the confirm) */
+#define CTRLC_ARM_COUNT   3
+#define CTRLC_WINDOW_MS   2000
+
+static uint64_t now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
 static struct termios oldtty;
 static int old_fd0_flags;
@@ -115,14 +133,36 @@ static int console_read(void *opaque, uint8_t *buf, int len)
         if (s->console_esc_state) {
             s->console_esc_state = 0;
             switch (ch) {
-            case 'x': printf("Terminated\n"); exit(0);
+            case 'x': printf("Terminated\r\n"); exit(0);
             case 1: goto output_char;
             default: break;
             }
         } else if (ch == 1) {
             s->console_esc_state = 1;
+        } else if (ch == 3) {
+            /* Ctrl-C: always forward to the guest so bash gets SIGINT. Track
+             * consecutive presses to offer a force-quit if the guest is wedged. */
+            uint64_t t = now_ms();
+            if (t - s->ctrlc_last_ms > CTRLC_WINDOW_MS) {
+                s->ctrlc_count = 0;
+                s->ctrlc_armed = FALSE;
+            }
+            s->ctrlc_last_ms = t;
+            if (s->ctrlc_armed) {
+                fputs("\r\n[tug] terminated\r\n", stderr);
+                exit(0);
+            }
+            buf[j++] = ch;                /* deliver this ^C to the guest */
+            if (++s->ctrlc_count >= CTRLC_ARM_COUNT) {
+                fputs("\r\n[tug] guest not responding to Ctrl-C? "
+                      "press Ctrl-C again to quit tug (or Ctrl-A x).\r\n", stderr);
+                fflush(stderr);
+                s->ctrlc_armed = TRUE;
+            }
         } else {
         output_char:
+            s->ctrlc_count = 0;           /* any other key means progress */
+            s->ctrlc_armed = FALSE;
             buf[j++] = ch;
         }
     }
@@ -354,7 +394,10 @@ int main(int argc, char **argv)
         return 1;
     }
     vm_add_cmdline(p, cmdline);
-    p->console = console_init(TRUE);
+    /* allow_ctrlc=FALSE: do NOT let the host tty turn ^C into SIGINT for tug.
+     * ^C is forwarded to the guest (bash SIGINT); console_read handles the
+     * force-quit escape (see CTRLC_ARM_COUNT). */
+    p->console = console_init(FALSE);
 
 #ifdef CONFIG_SLIRP
     /* user-mode NAT: guest reaches the Internet via the host, no privileges */

@@ -28,6 +28,7 @@ cat <<EOF
 
   tug — riscv64 Linux $(uname -r) on TinyEMU
   try:  uname -a   ls -l /   cat /proc/cpuinfo   ping -c2 8.8.8.8
+  keys: Ctrl-C interrupts the guest;  Ctrl-C x3 then again quits tug
   exit: poweroff -f      (or Ctrl-a x to kill the emulator)
 
 EOF
