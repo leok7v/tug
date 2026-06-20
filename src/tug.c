@@ -32,6 +32,13 @@
 #include "virtio.h"
 #include "machine.h"
 
+#ifdef TUG_EMBEDDED
+/* payload baked into the binary by generated/payload.s (.incbin) */
+extern const unsigned char tug_bbl_start[],    tug_bbl_end[];
+extern const unsigned char tug_kernel_start[], tug_kernel_end[];
+extern const unsigned char tug_initrd_start[], tug_initrd_end[];
+#endif
+
 /* ------------------------------------------------------------------ console */
 
 typedef struct {
@@ -257,10 +264,7 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-    if (argc - optind < 2) {
-        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-b] bbl.bin Image [initrd]\n");
-        return 1;
-    }
+    int nfiles = argc - optind;
 
     memset(p, 0, sizeof(*p));
     p->vmc = &riscv_machine_class;
@@ -269,11 +273,24 @@ int main(int argc, char **argv)
     p->ram_size = ram_mb << 20;
     p->rtc_real_time = TRUE;
 
-    p->files[VM_FILE_BIOS].buf   = load_file(argv[optind],   &len); p->files[VM_FILE_BIOS].len   = len;
-    p->files[VM_FILE_KERNEL].buf = load_file(argv[optind+1], &len); p->files[VM_FILE_KERNEL].len = len;
-    if (argc - optind >= 3) {
-        p->files[VM_FILE_INITRD].buf = load_file(argv[optind+2], &len);
-        p->files[VM_FILE_INITRD].len = len;
+#ifdef TUG_EMBEDDED
+    if (nfiles == 0) {
+        /* self-contained: payload baked into the binary, no external files */
+        p->files[VM_FILE_BIOS].buf   = (uint8_t *)tug_bbl_start;    p->files[VM_FILE_BIOS].len   = (int)(tug_bbl_end    - tug_bbl_start);
+        p->files[VM_FILE_KERNEL].buf = (uint8_t *)tug_kernel_start; p->files[VM_FILE_KERNEL].len = (int)(tug_kernel_end - tug_kernel_start);
+        p->files[VM_FILE_INITRD].buf = (uint8_t *)tug_initrd_start; p->files[VM_FILE_INITRD].len = (int)(tug_initrd_end - tug_initrd_start);
+    } else
+#endif
+    if (nfiles >= 2) {
+        p->files[VM_FILE_BIOS].buf   = load_file(argv[optind],   &len); p->files[VM_FILE_BIOS].len   = len;
+        p->files[VM_FILE_KERNEL].buf = load_file(argv[optind+1], &len); p->files[VM_FILE_KERNEL].len = len;
+        if (nfiles >= 3) {
+            p->files[VM_FILE_INITRD].buf = load_file(argv[optind+2], &len);
+            p->files[VM_FILE_INITRD].len = len;
+        }
+    } else {
+        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-b] bbl.bin Image [initrd]\n");
+        return 1;
     }
     vm_add_cmdline(p, cmdline);
     p->console = console_init(TRUE);

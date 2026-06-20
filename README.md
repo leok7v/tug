@@ -74,6 +74,12 @@ Measured booting our 6.1 kernel + toybox initramfs to userspace (`./tug -b …`)
 → **~6.5 MiB fixed emulator overhead** (RSS = guest RAM + 6.5), boots in as little
 as **32 MiB**, sub-0.2 s to userspace. A full modern Linux sandbox in ~38 MiB.
 
+`make embed` goes one step further: it `.incbin`s the bios + kernel + an
+interactive rootfs into the binary, producing **`./tug-embedded`** — a single
+**~5 MB self-contained executable** that boots our 6.1 Linux to a shell with **no
+external files and no arguments** (run it from anywhere). That's the iOS/Android
+app-bundle shape: one binary = the whole sandbox.
+
 ## Run it interactively (macOS Terminal.app)
 
 The `smoke` / `bootfs` / `boot6 MODE=test` targets assert non-interactively. To
@@ -107,6 +113,12 @@ make orchestrator
       vendors/diskimage/Image-c2w \
       vendors/diskimage/tug6.cpio.gz
 # add -b for boot-time + peak-RSS stats; poweroff -f to exit
+```
+
+**Self-contained binary — nothing external:**
+```sh
+make embed                # -> ./tug-embedded (~5 MB, payload baked in)
+./tug-embedded            # boots our 6.1 Linux to a shell, from anywhere, no args
 ```
 
 ## Layout

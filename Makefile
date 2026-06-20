@@ -90,7 +90,7 @@ MKE2FS  := mke2fs
 endif
 
 .PHONY: help deps vendors build smoke boot \
-        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator kernel \
+        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator embed kernel \
         clean distclean
 
 help:
@@ -113,6 +113,7 @@ help:
 	@echo "  make bootfs     boot our rootfs as init on the stock kernel (assert)"
 	@echo "  make boot6      boot our own 6.x kernel to a shell (MODE=test to assert)"
 	@echo "  make orchestrator  build ./tug, the standalone programmatic emulator"
+	@echo "  make embed      build ./tug-embedded, self-contained (payload baked in)"
 	@echo "  make kernel     (deferred) notes on building our own kernel"
 	@echo
 	@echo "  make clean / distclean"
@@ -239,6 +240,23 @@ $(TUG_BIN): src/tug.c $(TEMU)
 	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c \
 	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TEMU_LIBS) -o $@
 	@echo "built orchestrator: $@  (./tug -b <bbl> <Image> [initrd] to benchmark)"
+
+# Self-contained build: bake bios + our 6.x kernel + an interactive rootfs into
+# the binary via .incbin (no external files) — the iOS-app-bundle shape.
+KERNEL6      := $(IMAGE_DIR)/Image-c2w
+BBL_BIN      := $(IMAGE_DIR)/bbl64.bin
+EMBED_BIN    := tug-embedded
+EMBED_INITRD := generated/tug-embed.cpio.gz
+EMBED_S      := generated/payload.s
+embed: $(EMBED_BIN)
+$(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init
+	@mkdir -p generated
+	bash scripts/embed-gen.sh "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" \
+	  "$(CURDIR)/$(BBL_BIN)" "$(CURDIR)/$(KERNEL6)" "$(CURDIR)/$(EMBED_INITRD)" "$(CURDIR)/$(EMBED_S)"
+	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -DTUG_EMBEDDED -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
+	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c $(EMBED_S) \
+	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TEMU_LIBS) -o $@
+	@echo "built self-contained $@ (`du -h $@ | cut -f1`) — run: ./$@  (no args)"
 
 kernel:
 	@echo "Building our OWN kernel is deferred."

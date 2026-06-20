@@ -5,3 +5,6 @@
 # orchestrator build artifact
 /tug
 /tug.dSYM/
+/generated/
+/tug-embedded
+/tug-embedded.dSYM/
