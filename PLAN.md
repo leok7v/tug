@@ -100,9 +100,18 @@ Considered `mmap(MAP_SHARED)` over the pre-sized image (read/write become pure
 memcpy, marginally faster) but rejected as the default: on our *sparse, growing*
 disk a host-disk-full condition would surface as **SIGBUS** (hard crash) during
 writeback, whereas `pwrite` returns a clean `-ENOSPC` the guest sees as an IO
-error. `mmap` remains a possible opt-in if we ever add a SIGBUS handler /
-preallocation. (`temu.c`'s backend, used only by `make apkboot`'s test, never
-had the per-write flush.)
+error. (`temu.c`'s backend, used only by `make apkboot`'s test, never had the
+per-write flush.)
+
+*mmap — deferred until much later, after everything else is optimized (lowest
+priority).* Options if revisited: (a) `mmap` + a SIGBUS handler, or
+preallocate/`fallocate` the whole image so writeback can't ENOSPC; or (b) a
+hybrid — `memcpy` into pages already faulted-in/allocated, `pwrite` for writes
+that land in new/hole positions so allocation failures stay recoverable. The
+hybrid avoids SIGBUS but is fiddly (tracking which regions are backed). The win
+over plain `pwrite` is only the per-IO syscall, which is negligible next to
+interpreter cost — so this is not worth its complexity until the interpreter
+itself is optimized (see §3).
 
 Follow-ups (lower): virtio-block **discard/TRIM** passthrough so deleting guest
 files punches holes and the sparse `tug.img` can shrink (today it only grows);
