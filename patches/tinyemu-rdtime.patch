@@ -1,14 +1,56 @@
+TinyEMU: implement rdtime (time CSR) backed by the machine real-time clock.
+
+Linux 6.x userspace (musl getrandom/vDSO) executes rdtime; the 2019 TinyEMU
+does not implement the time CSR, so it traps to SIGILL. Implement it, but
+back it by the SAME clock the CLINT mtime/timecmp uses (rtc_get_time via a
+machine-set callback). If rdtime and the CLINT timer use different clocks,
+the kernel clocksource and clockevent disagree and timer interrupts never
+fire on an idle CPU, hanging sleep()/poll()/select().
+
+--- a/riscv_cpu.h
++++ b/riscv_cpu.h
+@@ -59,10 +59,24 @@
+ 
+ typedef struct {
+     const RISCVCPUClass *class_ptr;
++    /* tug: real-time source for the `time` CSR (rdtime). Set by the machine so
++     * rdtime and the CLINT mtime/timecmp share one timebase — Linux assumes the
++     * clocksource (rdtime) and the clockevent (CLINT timer) tick identically. */
++    uint64_t (*get_timer)(void *opaque);
++    void *timer_opaque;
+ } RISCVCPUCommonState;
+ 
+ int riscv_cpu_get_max_xlen(void);
+ 
++/* tug: wire rdtime to a machine-provided real-time clock (see above). */
++static inline void riscv_cpu_set_timer_cb(RISCVCPUState *s,
++                                          uint64_t (*cb)(void *), void *opaque)
++{
++    RISCVCPUCommonState *cs = (RISCVCPUCommonState *)s;
++    cs->get_timer = cb;
++    cs->timer_opaque = opaque;
++}
++
+ extern const RISCVCPUClass riscv_cpu_class32;
+ extern const RISCVCPUClass riscv_cpu_class64;
+ extern const RISCVCPUClass riscv_cpu_class128;
 --- a/riscv_cpu.c
 +++ b/riscv_cpu.c
-@@ -728,6 +728,12 @@
+@@ -728,6 +728,18 @@
          val = s->fflags | (s->frm << 5);
          break;
  #endif
 +    case 0xc01: /* utime: real hardware implements rdtime; without it Linux 6.x
-+                   userspace (musl) traps to SIGILL. Return the CLINT mtime value
-+                   (insn_counter / RTC_FREQ_DIV, where RTC_FREQ_DIV=16).
-+                   Read unconditionally — TinyEMU does not track s?counteren TM. */
-+        val = (int64_t)(s->insn_counter / 16);
++                   userspace (musl) traps to SIGILL. Must return the SAME value as
++                   the CLINT mtime, or the kernel clocksource (rdtime) and the
++                   clockevent (CLINT timecmp) disagree and timer interrupts never
++                   fire on an idle CPU (sleep/poll/select hang). The machine wires
++                   get_timer to its real-time rtc_get_time(); fall back to the old
++                   cycle-based value only if unset. Read unconditionally. */
++        if (s->common.get_timer)
++            val = (int64_t)s->common.get_timer(s->common.timer_opaque);
++        else
++            val = (int64_t)(s->insn_counter / 16);
 +        break;
      case 0xc00: /* ucycle */
      case 0xc02: /* uinstret */

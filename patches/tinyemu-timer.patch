@@ -1,0 +1,33 @@
+TinyEMU: feed rdtime from rtc_get_time so it matches the CLINT mtime.
+
+Adds machine_get_timer() and registers it via riscv_cpu_set_timer_cb so the
+time CSR (see tinyemu-rdtime.patch) returns the same value as the CLINT
+mtime. With rtc_real_time=TRUE this clock advances during WFI/idle, so the
+MTIP timer interrupt fires and sleep/poll/select time out correctly.
+
+--- a/riscv_machine.c
++++ b/riscv_machine.c
+@@ -99,6 +99,12 @@
+     }
+     //    printf("rtc_time=%" PRId64 "\n", val);
+     return val;
++}
++
++/* tug: the `time` CSR (rdtime) reads this so it matches the CLINT mtime. */
++static uint64_t machine_get_timer(void *opaque)
++{
++    return rtc_get_time((RISCVMachine *)opaque);
+ }
+ 
+ static uint32_t htif_read(void *opaque, uint32_t offset,
+@@ -916,7 +922,9 @@
+     if (p->rtc_real_time) {
+         s->rtc_start_time = rtc_get_real_time(s);
+     }
+-    
++    /* tug: rdtime must read the same clock as the CLINT mtime/timecmp. */
++    riscv_cpu_set_timer_cb(s->cpu_state, machine_get_timer, s);
++
+     cpu_register_device(s->mem_map, CLINT_BASE_ADDR, CLINT_SIZE, s,
+                         clint_read, clint_write, DEVIO_SIZE32);
+     cpu_register_device(s->mem_map, PLIC_BASE_ADDR, PLIC_SIZE, s,
