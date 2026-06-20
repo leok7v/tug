@@ -90,7 +90,7 @@ MKE2FS  := mke2fs
 endif
 
 .PHONY: help deps vendors build smoke boot \
-        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator embed bash curl kernel \
+        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator embed bash curl busyboxvi kernel \
         clean distclean
 
 help:
@@ -116,6 +116,7 @@ help:
 	@echo "  make embed      build ./tug-embedded, self-contained (payload baked in)"
 	@echo "  make bash       cross-build static riscv64 bash for the guest shell"
 	@echo "  make curl       cross-build static riscv64 curl+mbedTLS (HTTPS) + CA bundle"
+	@echo "  make busyboxvi  cross-build static riscv64 busybox vi (replaces buggy toybox vi)"
 	@echo "  make kernel     (deferred) notes on building our own kernel"
 	@echo
 	@echo "  make clean / distclean"
@@ -250,6 +251,7 @@ BBL_BIN      := $(IMAGE_DIR)/bbl64.bin
 BASH_BIN     := $(VENDOR)/bash-5.2/bash
 CURL_BIN     := $(VENDOR)/curl-build/curl/src/curl
 CACERT       := $(VENDOR)/curl-build/cacert.pem
+BUSYBOX_BIN  := $(VENDOR)/busybox-1.36.1/busybox
 EMBED_BIN    := tug-embedded
 EMBED_INITRD := generated/tug-embed.cpio.gz
 EMBED_S      := generated/payload.s
@@ -265,10 +267,16 @@ curl: $(CURL_BIN)
 $(CURL_BIN): $(TC_GCC)
 	bash scripts/build-curl.sh "$(TC)" "$(CURDIR)/$(VENDOR)"
 
+# busybox built with just vi (toybox's pending vi is buggy); overlaid as /usr/bin/vi.
+busyboxvi: $(BUSYBOX_BIN)
+$(BUSYBOX_BIN): $(TC_GCC)
+	bash scripts/build-busybox.sh "$(TC)" "$(CURDIR)/$(VENDOR)"
+
 embed: $(EMBED_BIN)
-$(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init $(BASH_BIN) $(CURL_BIN)
+$(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init $(BASH_BIN) $(CURL_BIN) $(BUSYBOX_BIN)
 	@mkdir -p generated
 	TUG_BASH="$(CURDIR)/$(BASH_BIN)" TUG_CURL="$(CURDIR)/$(CURL_BIN)" TUG_CACERT="$(CURDIR)/$(CACERT)" \
+	  TUG_BUSYBOX="$(CURDIR)/$(BUSYBOX_BIN)" \
 	  bash scripts/embed-gen.sh "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" \
 	  "$(CURDIR)/$(BBL_BIN)" "$(CURDIR)/$(KERNEL6)" "$(CURDIR)/$(EMBED_INITRD)" "$(CURDIR)/$(EMBED_S)"
 	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -DTUG_EMBEDDED -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \

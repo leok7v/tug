@@ -37,6 +37,10 @@ fi
 if [ -n "${TUG_CACERT:-}" ] && [ -f "$TUG_CACERT" ]; then
     mkdir -p "$WORK"/etc/ssl/certs && cp "$TUG_CACERT" "$WORK"/etc/ssl/certs/ca-certificates.crt
 fi
+if [ -n "${TUG_BUSYBOX:-}" ] && [ -f "$TUG_BUSYBOX" ]; then
+    rm -f "$WORK"/usr/bin/busybox && cp "$TUG_BUSYBOX" "$WORK"/usr/bin/busybox && chmod 755 "$WORK"/usr/bin/busybox
+    rm -f "$WORK"/usr/bin/vi && ln -s busybox "$WORK"/usr/bin/vi  # solid vi (toybox vi is buggy)
+fi
 if [ "$MODE" = test ]; then
     cat > "$WORK"/init <<'EOF'
 #!/bin/sh

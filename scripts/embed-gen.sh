@@ -31,6 +31,10 @@ fi
 if [ -n "${TUG_CACERT:-}" ] && [ -f "$TUG_CACERT" ]; then
     mkdir -p "$W"/etc/ssl/certs && cp "$TUG_CACERT" "$W"/etc/ssl/certs/ca-certificates.crt
 fi
+if [ -n "${TUG_BUSYBOX:-}" ] && [ -f "$TUG_BUSYBOX" ]; then
+    rm -f "$W"/usr/bin/busybox && cp "$TUG_BUSYBOX" "$W"/usr/bin/busybox && chmod 755 "$W"/usr/bin/busybox
+    rm -f "$W"/usr/bin/vi && ln -s busybox "$W"/usr/bin/vi  # solid vi (toybox vi is buggy)
+fi
 ( cd "$W" && find . | cpio -o -H newc -R +0:+0 2>/dev/null | gzip ) > "$OUT_CPIO"
 
 # Mach-O assembly: bake the three blobs into the read-only const section.
