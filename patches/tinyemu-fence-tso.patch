@@ -1,0 +1,28 @@
+TinyEMU: accept fence.tso (fm=1000) in the FENCE decoder.
+
+The 2019 core's FENCE decode rejected any non-zero fm field
+(mask 0xf00fff80), so fence.tso (fm=1000, base-ISA memory-ordering
+fence) trapped as an illegal instruction. LLVM emits fence.tso for
+C++ atomics, so e.g. clang SIGILL'd on startup while the GCC-built
+base userland (which uses 'fence rw,rw', fm=0) ran fine. Drop bit 31
+from the reject mask so fm=1000 is allowed; ordering is a nop in this
+sequential interpreter. rs1/funct3/rd are still validated as zero.
+
+--- a/riscv_cpu_template.h
++++ b/riscv_cpu_template.h
+@@ -1351,8 +1351,13 @@
+         case 0x0f: /* misc-mem */
+             funct3 = (insn >> 12) & 7;
+             switch(funct3) {
+-            case 0: /* fence */
+-                if (insn & 0xf00fff80)
++            case 0: /* fence / fence.tso */
++                /* fence.tso (fm=1000, bit 31) is base-ISA but post-dates this
++                 * 2019 core; the old mask 0xf00fff80 rejected any fm bits and
++                 * SIGILL'd it (LLVM emits fence.tso for C++ atomics, e.g. clang).
++                 * Allow fm=1000 too; ordering is a nop in this sequential
++                 * interpreter. Still validate rs1/funct3/rd are zero. */
++                if (insn & 0x700fff80)
+                     goto illegal_insn;
+                 break;
+             case 1: /* fence.i */
