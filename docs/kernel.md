@@ -82,16 +82,27 @@ initramfs:
 ```
 { version: 1, machine: "riscv64", memory_size: 256,
   bios: "bbl64.bin", kernel: "Image-c2w", initrd: "<rootfs>.cpio.gz",
-  cmdline: "console=hvc0" }
+  cmdline: "console=hvc0 virtio_net.napi_tx=false",
+  eth0: { driver: "user" } }
 ```
 
 `uname` inside the guest then reports `Linux ... 6.1.176 ... riscv64 Toybox`.
 
+**`virtio_net.napi_tx=false` is required** on 6.x: newer kernels default the NAPI
+TX path on, which mishandles TinyEMU's virtio-net notifications and triggers a
+`NETDEV WATCHDOG ... transmit queue timed out` hang. With it disabled the
+interface comes up cleanly. (Drop `eth0`/the option entirely if you don't need
+networking.)
+
 ## Known issues / TODO
 
-- **virtio-net** does not work on 6.1 + TinyEMU (NETDEV TX watchdog timeout), so
-  mkroot's `/init` hangs on its `ifconfig`/`sntp` networking. Boot with a
-  network-free init for now; fixing virtio-net negotiation is a follow-up.
+- **mkroot's `/init` still blocks on `sntp time.google.com`**: TinyEMU exposes no
+  RTC, so the guest clock starts at epoch 0 and the init's NTP step (no timeout)
+  hangs. Not a kernel/virtio bug — use a custom init (or one that skips NTP) for a
+  clean shell. The `vendors/diskimage/*test*.cfg` files boot self-running inits.
+- **virtio-net** TX is fixed by `napi_tx=false`; full NAT connectivity to the
+  outside is environment-dependent (host network / slirp), so verify on a real
+  host.
 - This kernel build is not yet a `make` target (the case-sensitive volume + host
   shims make it macOS-specific); the steps above are the authoritative recipe.
 - A freshly built `riscv-pk` bbl (container2wasm static-HTIF recipe) did not work
