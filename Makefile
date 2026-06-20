@@ -90,7 +90,7 @@ MKE2FS  := mke2fs
 endif
 
 .PHONY: help deps vendors build smoke boot \
-        toolchain headers tcc rootfs ext2 payload bootfs boot6 kernel \
+        toolchain headers tcc rootfs ext2 payload bootfs boot6 orchestrator kernel \
         clean distclean
 
 help:
@@ -112,6 +112,7 @@ help:
 	@echo "  make payload    toolchain -> headers -> tcc -> rootfs -> ext2"
 	@echo "  make bootfs     boot our rootfs as init on the stock kernel (assert)"
 	@echo "  make boot6      boot our own 6.x kernel to a shell (MODE=test to assert)"
+	@echo "  make orchestrator  build ./tug, the standalone programmatic emulator"
 	@echo "  make kernel     (deferred) notes on building our own kernel"
 	@echo
 	@echo "  make clean / distclean"
@@ -226,6 +227,18 @@ MODE ?= interactive
 boot6: $(TEMU) $(INITRAMFS) $(IMAGE_DIR)/$(CFG)
 	@bash scripts/boot6.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)" \
 	  "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" $(MODE)
+
+# Phase 2: a standalone pure-C orchestrator (src/tug.c) that drives the TinyEMU
+# core programmatically (no JSON config). Links the core objects built for temu,
+# minus Bellard's temu.o (its own main) and slirp (host net callbacks live in
+# temu.c). Usage: ./tug [-m MB] [-a cmdline] [-b] <bbl> <Image> [initrd]
+TUG_BIN := tug
+orchestrator: $(TUG_BIN)
+$(TUG_BIN): src/tug.c $(TEMU)
+	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
+	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c \
+	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TEMU_LIBS) -o $@
+	@echo "built orchestrator: $@  (./tug -b <bbl> <Image> [initrd] to benchmark)"
 
 kernel:
 	@echo "Building our OWN kernel is deferred."

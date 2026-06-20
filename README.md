@@ -56,21 +56,43 @@ Built entirely **natively on macOS, no Docker / no fork / no heavy deps**:
   [`docs/kernel.md`](docs/kernel.md) for the full reproducible recipe.
   `make boot6` boots it to an interactive shell (`make boot6 MODE=test` asserts).
 
+### Phase 2 — standalone host orchestrator ✅ (in progress)
+
+`src/tug.c` (`make orchestrator` → `./tug`) is a ~200 KB pure-C program that drives
+the TinyEMU core **programmatically** — no JSON config, no SDL/x86/net — loading
+bios/kernel/initrd into memory and wiring the guest console to host stdio. This is
+the embeddable "kernel in a box" core for the iOS/Android path.
+
+Measured booting our 6.1 kernel + toybox initramfs to userspace (`./tug -b …`):
+
+| guest RAM | peak RSS | boot wall-time |
+|----------:|---------:|---------------:|
+| 32 MiB    | 38.5 MiB | 0.15 s |
+| 64 MiB    | 70.5 MiB | 0.15 s |
+| 128 MiB   | 134.5 MiB| 0.16 s |
+
+→ **~6.5 MiB fixed emulator overhead** (RSS = guest RAM + 6.5), boots in as little
+as **32 MiB**, sub-0.2 s to userspace. A full modern Linux sandbox in ~38 MiB.
+
 ## Layout
 
 ```
 Makefile            download → toolchain → toybox/tcc → rootfs → ext2 → boot
+src/tug.c           standalone programmatic orchestrator (make orchestrator)
+config/tug-init     TinyEMU-appropriate pid-1 init for the full-system boot
 compat/             macOS build shims (keep vendored source pristine)
 patches/            functional emulator patches (rdtime CSR), applied on extract
-scripts/            smoke.sh, bootfs.sh — non-interactive boot assertions
+scripts/            smoke.sh, bootfs.sh, boot6.sh — non-interactive boot assertions
 docs/kernel.md      reproducible "our 6.x kernel on TinyEMU" recipe
 vendors/            downloads + extracted sources + build (gitignored)
 ```
 
 ## Next
 
-- Fix virtio-net on 6.x+TinyEMU (mkroot's init networking currently times out);
-  resolve tcc in-guest self-linking against a tcc-friendly libc.
-- Phase 2: standalone host-orchestrator C shell; measure RSS/overhead.
-- Deferred until a baseline benchmark exists: direct-threaded interpreter,
-  Mach-exception MMU, register pinning, AOT (see `PLAN.md` §3).
+- Phase 2 cont.: trim the orchestrator's linked objects (drop 9p/fs, simplefb)
+  for a minimal iOS build; embed the payload; stand up iOS/Android targets.
+- Phase 3 (now that we have a baseline — ~6.5 MiB overhead, 0.15 s boot):
+  direct-threaded interpreter, Mach-exception MMU, register pinning, AOT
+  (see `PLAN.md` §3).
+- tcc in-guest self-linking (needs a tcc-friendly libc); make the kernel build a
+  `make` target.
