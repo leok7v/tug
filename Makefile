@@ -142,7 +142,7 @@ help:
 	@echo
 	@echo "apk / persistent Alpine userland:"
 	@echo "  make alpine     vendor the Alpine $(ALPINE_VER) riscv64 minirootfs (apk seed)"
-	@echo "  make disk       create a sparse $(DISK_SIZE) ext4 data disk ($(DATA_DISK)); DISK_SIZE= to override"
+	@echo "  make disk       create a sparse $(DISK_SIZE) ext4 data disk ($(DATA_DISK)); DISK_SIZE= to override (rebuild ERASES it)"
 	@echo "  make apkboot    boot the Alpine guest (seeds /dev/vda on first run); MODE=test to assert"
 	@echo "  make embed-apk  self-contained ./tug-embedded-apk (Alpine seed baked in)"
 	@echo
@@ -321,7 +321,7 @@ $(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init $(BASH_BIN) $(CURL_
 # Self-contained apk build: like `embed`, but bakes the Alpine seed + apk-init.
 # Run `make disk` once, then ./tug-embedded-apk auto-attaches ./tug-data.img.
 embed-apk: $(EMBED_APK_BIN)
-$(EMBED_APK_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-apk-init $(CURL_BIN) $(BUSYBOX_BIN) $(ALPINE_TGZ)
+$(EMBED_APK_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-apk-init $(CURL_BIN) $(BUSYBOX_BIN) $(ALPINE_TGZ) $(BBL_BIN) $(KERNEL6)
 	@mkdir -p generated
 	TUG_CURL="$(CURDIR)/$(CURL_BIN)" TUG_CACERT="$(CURDIR)/$(CACERT)" \
 	  TUG_BUSYBOX="$(CURDIR)/$(BUSYBOX_BIN)" TUG_ALPINE_SEED="$(CURDIR)/$(ALPINE_TGZ)" \
@@ -360,9 +360,11 @@ $(DATA_DISK):
 # mounts /dev/vda, first-boot-seeds it from the baked Alpine minirootfs, then
 # switch_roots into it and drops to a shell with apk available.
 # MODE=test runs a self-checking init (mounts, seeds, apk update, poweroff).
-apkboot: $(TEMU) $(INITRAMFS) $(ALPINE_TGZ) $(DATA_DISK) config/tug-apk-init $(IMAGE_DIR)/$(CFG)
+# Boots via the tug orchestrator ($(TUG_BIN)) so the test exercises tug.c's own
+# virtio-block backend (the shipping path), not stock temu's.
+apkboot: $(TUG_BIN) $(INITRAMFS) $(ALPINE_TGZ) $(DATA_DISK) config/tug-apk-init
 	@TUG_CURL="$(CURDIR)/$(CURL_BIN)" TUG_CACERT="$(CURDIR)/$(CACERT)" \
-	  bash scripts/apkboot.sh "$(CURDIR)/$(TEMU)" "$(CURDIR)/$(IMAGE_DIR)" \
+	  bash scripts/apkboot.sh "$(CURDIR)/$(TUG_BIN)" "$(CURDIR)/$(IMAGE_DIR)" \
 	  "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-apk-init" \
 	  "$(CURDIR)/$(ALPINE_TGZ)" "$(CURDIR)/$(DATA_DISK)" $(MODE)
 

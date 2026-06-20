@@ -8,11 +8,15 @@
 #   default mode = interactive; "test" mode asserts seed + switch_root + apk.
 set -euo pipefail
 
-TEMU="${1:?}"; IMG_DIR="${2:?}"; ROOTFS_DIR="${3:?}"; APK_INIT="${4:?}"
+# Arg 1 is the `tug` orchestrator binary (src/tug.c) — NOT stock temu — so this
+# test exercises the SAME pread/pwrite virtio-block backend that tug-embedded-apk
+# ships, instead of temu.c's separate stdio backend.
+TUG="${1:?}"; IMG_DIR="${2:?}"; ROOTFS_DIR="${3:?}"; APK_INIT="${4:?}"
 ALPINE_TGZ="${5:?}"; DATA_DISK="${6:?}"; MODE="${7:-interactive}"
-KERNEL="$IMG_DIR/Image-c2w"
+KERNEL="$IMG_DIR/Image-c2w"; BBL="$IMG_DIR/bbl64.bin"
 
 [ -f "$KERNEL" ]     || { echo "missing $KERNEL — build the 6.x kernel (docs/kernel.md)"; exit 1; }
+[ -f "$BBL" ]        || { echo "missing $BBL — build M0 first"; exit 1; }
 [ -f "$ALPINE_TGZ" ] || { echo "missing Alpine seed $ALPINE_TGZ — run: make alpine"; exit 1; }
 [ -f "$DATA_DISK" ]  || { echo "missing data disk $DATA_DISK — run: make disk"; exit 1; }
 
@@ -101,33 +105,27 @@ chmod +x "$WORK"/init
 
 ( cd "$WORK" && find . | cpio -o -H newc -R +0:+0 2>/dev/null | gzip > "$IMG_DIR/tug-apk.cpio.gz" )
 
-# Config attaches the data disk as drive0 -> virtio-block /dev/vda (rw).
-cat > "$IMG_DIR/tug-apk.cfg" <<EOF
-{
-    version: 1, machine: "riscv64", memory_size: 1024,
-    bios: "bbl64.bin", kernel: "Image-c2w", initrd: "tug-apk.cpio.gz",
-    cmdline: "console=hvc0 virtio_net.napi_tx=false",
-    drive0: { file: "$DATA_DISK" },
-    eth0: { driver: "user" },
-}
-EOF
+# Boot via the tug orchestrator: -d attaches the data disk as /dev/vda through
+# tug.c's own block backend (the one tug-embedded-apk ships); eth0 slirp NAT is
+# auto-enabled by tug.c. 1 GiB RAM for apk/builds.
+CMDLINE="console=hvc0 virtio_net.napi_tx=false"
+set -- -m 1024 -d "$DATA_DISK" -a "$CMDLINE" "$BBL" "$KERNEL" "$IMG_DIR/tug-apk.cpio.gz"
 
-cd "$IMG_DIR"
 if [ "$MODE" = test ]; then
     LOG="$(mktemp -t tugapk.XXXXXX)"; trap 'rm -rf "$WORK" "$LOG"' EXIT
     # apk update over the interpreter is slow; give the guest a generous budget.
-    ( sleep 300 ) | "$TEMU" -rw tug-apk.cfg >"$LOG" 2>&1 &
+    ( sleep 300 ) | "$TUG" "$@" >"$LOG" 2>&1 &
     P=$!; ( sleep 300; kill -9 "$P" 2>/dev/null ) & G=$!; disown "$G" 2>/dev/null || true
     wait "$P" 2>/dev/null || true; kill -9 "$G" 2>/dev/null || true
     echo "---- apk boot (matched lines) ----"
     grep -aE 'APK_VDA_MOUNT_OK|APK_SEED_OK|APK_ALREADY_SEEDED|APK_VERSION:|APK_PERSIST|APK_UPDATE_DONE|APK_TEST_COMPLETE' "$LOG" | sed 's/\r$//' || true
     echo "----------------------------------"
     if grep -aq APK_TEST_COMPLETE "$LOG" && grep -aqE 'APK_SEED_OK|APK_ALREADY_SEEDED' "$LOG" && grep -aq 'APK_VERSION:' "$LOG"; then
-        echo "APKBOOT: PASS — /dev/vda mounts, Alpine seeds, apk runs inside the guest"
+        echo "APKBOOT: PASS — /dev/vda mounts (tug block backend), Alpine seeds, apk runs"
     else
         echo "APKBOOT: FAIL"; tail -40 "$LOG"; exit 1
     fi
 else
     echo "Booting the persistent Alpine/apk guest. Exit emulator: Ctrl-a x"
-    exec "$TEMU" -rw tug-apk.cfg
+    exec "$TUG" "$@"
 fi

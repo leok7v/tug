@@ -39,16 +39,29 @@ if ! grep -q " $NEWROOT " /proc/mounts 2>/dev/null; then
 fi
 
 # --- first-boot seed --------------------------------------------------------
-if [ ! -x "$NEWROOT/sbin/apk" ]; then
+# Gate on a sentinel written ONLY after tar fully succeeds, not on the presence
+# of /sbin/apk: tar extracts in archive order, so a first boot interrupted after
+# sbin/apk lands but before the rest would otherwise look "seeded" on the next
+# boot and switch_root into a half-extracted, broken Alpine.
+SEEDED="$NEWROOT/.tug-seeded"
+if [ ! -f "$SEEDED" ] && [ -x "$NEWROOT/sbin/apk" ]; then
+    # Legacy disk seeded before the sentinel existed (a complete Alpine is
+    # already present): adopt it in place, don't re-seed or wipe.
+    : > "$SEEDED"
+fi
+if [ ! -f "$SEEDED" ]; then
     echo
     echo "  tug: first boot — seeding Alpine userland onto /dev/vda ..."
-    if [ -f "$SEED" ]; then
-        ( cd "$NEWROOT" && tar xpf "$SEED" ) || {
-            echo "  tug: ERROR extracting Alpine seed — falling back to toybox shell."
-            setsid -c <>/dev/console >&0 2>&1 /bin/sh; poweroff -f
-        }
-    else
+    if [ ! -f "$SEED" ]; then
         echo "  tug: ERROR — Alpine seed $SEED missing from initramfs."
+        setsid -c <>/dev/console >&0 2>&1 /bin/sh; poweroff -f
+    fi
+    # Clear any partial remains from a previously-interrupted seed, then extract.
+    rm -rf "$NEWROOT"/* 2>/dev/null
+    if ( cd "$NEWROOT" && tar xpf "$SEED" ) && sync; then
+        : > "$SEEDED"            # mark complete only after a clean extraction
+    else
+        echo "  tug: ERROR extracting Alpine seed — falling back to toybox shell."
         setsid -c <>/dev/console >&0 2>&1 /bin/sh; poweroff -f
     fi
 

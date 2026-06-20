@@ -135,8 +135,9 @@ apk update && apk add bash clang nodejs npm python3 py3-pip cargo
 
 ```sh
 make alpine               # vendor the Alpine minirootfs (apk seed), sha256-checked
-make disk                 # create tug-data.img — a sparse 20G ext4 disk (~13M on host)
-                          #   override size: make disk DISK_SIZE=40G
+make disk                 # create tug-data.img — a sparse 32G ext4 disk (~13M on host)
+                          #   override size: make disk DISK_SIZE=64G
+                          #   (forcing a rebuild ERASES tug-data.img and its contents)
 make apkboot              # boot it interactively; first run seeds /dev/vda from the
                           #   baked Alpine seed, then switch_roots into Alpine
 make apkboot MODE=test    # non-interactive: assert mount + seed + apk + (slow) update

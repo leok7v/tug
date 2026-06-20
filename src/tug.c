@@ -21,6 +21,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <fcntl.h>
+#include <sys/file.h>   /* flock: guard the data disk against two tug instances */
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
@@ -93,8 +94,8 @@ static int tug_bf_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf,
     size_t len = (size_t)n * TUG_SECTOR_SIZE;
     off_t off = (off_t)sector_num * TUG_SECTOR_SIZE;
     ssize_t r;
-    if (bf->fd < 0)
-        return -1;
+    if (bf->fd < 0 || n <= 0)
+        return n <= 0 ? 0 : -1;
     r = pread(bf->fd, buf, len, off);
     if (r < 0)
         return -1;
@@ -110,8 +111,10 @@ static int tug_bf_write_async(BlockDevice *bs, uint64_t sector_num,
     TugBlockFile *bf = bs->opaque;
     size_t len = (size_t)n * TUG_SECTOR_SIZE;
     off_t off = (off_t)sector_num * TUG_SECTOR_SIZE;
-    if (bf->fd < 0)
-        return -1;
+    if (bf->fd < 0 || n <= 0)
+        return n <= 0 ? 0 : -1;
+    /* virtio block requests here are small and bounded, so a full-length pwrite
+     * is expected; a short write means ENOSPC/IO error -> report failure. */
     if (pwrite(bf->fd, buf, len, off) != (ssize_t)len)
         return -1;             /* no per-write flush: page cache + fsync at exit */
     return 0; /* synchronous */
@@ -128,6 +131,16 @@ static BlockDevice *tug_block_device_init(const char *filename)
     if (fd < 0) {
         fprintf(stderr, "tug: cannot open data disk %s: %s\n",
                 filename, strerror(errno));
+        return NULL;
+    }
+    /* Exclusive advisory lock: two tug instances writing the same ext4 image
+     * through independent guest filesystems would corrupt it (ext4 is not
+     * cluster-aware). flock is released automatically when the fd closes / the
+     * process exits. */
+    if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
+        fprintf(stderr, "tug: data disk %s is already in use by another tug "
+                "instance (refusing to open it twice).\n", filename);
+        close(fd);
         return NULL;
     }
     file_size = lseek(fd, 0, SEEK_END);
