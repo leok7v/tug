@@ -205,7 +205,7 @@ rootfs: $(INITRAMFS)
 $(INITRAMFS): $(TC_GCC) $(HEADERS)
 	test -d $(TOYBOX_DIR) || git clone --depth 1 https://github.com/landley/toybox.git $(TOYBOX_DIR)
 	cd $(TOYBOX_DIR) && \
-	  NOCLEAR=1 NOAIRLOCK=1 CROSS_COMPILE="$(CROSS)" \
+	  NOCLEAR=1 NOAIRLOCK=1 CROSS_COMPILE="$(CROSS)" PENDING="VI" \
 	  LDOPTIMIZE='-Wl,--gc-sections -Wl,--as-needed' STRIP=strip \
 	  $(GNUENV) bash mkroot/mkroot.sh
 	@echo "rootfs: $(INITRAMFS)"
