@@ -74,14 +74,19 @@ else
     echo "tug-first-run-$(date +%s 2>/dev/null || echo X)" > /mnt/tug-persist-marker
     echo APK_PERSIST_MARKER_WRITTEN
 fi
-# apk update over slirp NAT + TLS (best effort; network may be unavailable in
-# CI, and is slow under the interpreter — bound it with toybox timeout).
+# Hard pass criteria (mount + seed + apk + persist) are now all proven; emit the
+# completion marker BEFORE the slow, network-dependent step so the assertion
+# does not hinge on it.
+sync
+echo APK_TEST_COMPLETE
+# apk update over slirp NAT + TLS — informational only (best effort; it is slow
+# under the interpreter and network may be unavailable in CI). Bounded so it
+# can't wedge the run.
 if timeout 150 chroot /mnt /sbin/apk update --no-progress 2>&1 | tail -2; then
     echo APK_UPDATE_DONE
 else
     echo APK_UPDATE_SKIPPED
 fi
-echo APK_TEST_COMPLETE
 sync
 poweroff -f
 EOF
