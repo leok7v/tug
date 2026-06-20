@@ -63,9 +63,9 @@ ALPINE_TGZ  := $(VENDOR)/alpine-minirootfs-$(ALPINE_VER)-riscv64.tar.gz
 
 # Persistent writable data disk (becomes the Alpine / after switch_root). Raw
 # ext4, created sparse so the host file only consumes used blocks; a high
-# bytes-per-inode keeps an empty 20G fs from preallocating gigabytes of inodes.
-# Override size at the command line, e.g.  make disk DISK_SIZE=40G
-DISK_SIZE   ?= 20G
+# bytes-per-inode keeps an empty 32G fs from preallocating gigabytes of inodes.
+# Override size at the command line, e.g.  make disk DISK_SIZE=64G
+DISK_SIZE   ?= 32G
 DATA_DISK   := tug-data.img
 
 TEMU_CONFIG := CONFIG_FS_NET= CONFIG_SDL= CONFIG_X86EMU= CONFIG_INT128=
