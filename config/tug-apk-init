@@ -73,7 +73,7 @@ cat > "$NEWROOT/etc/profile.d/tug.sh" <<'BANNER'
 if [ -t 0 ]; then
   echo
   echo "  tug — Alpine $(. /etc/os-release 2>/dev/null; echo "$VERSION_ID") riscv64 on TinyEMU"
-  echo "  packages: apk update && apk add <pkg>   e.g.  clang  nodejs npm  python3 py3-pip  cargo"
+  echo "  packages: apk update && apk add <pkg>   e.g.  build-base binutils gcc clang  nodejs npm  python3 py3-pip  cargo"
   echo "  storage:  persistent /  on /dev/vda ($(df -h / 2>/dev/null | awk 'NR==2{print $2}'))   scratch: /tmp"
   echo "  keys:     Ctrl-C -> guest;  Ctrl-C x3 then again -> quit tug;  poweroff -> shutdown"
   echo
