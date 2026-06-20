@@ -205,6 +205,13 @@ mount --move /dev  "$NEWROOT/dev"  2>/dev/null || mount -t devtmpfs dev "$NEWROO
 mount --move /proc "$NEWROOT/proc" 2>/dev/null
 mount --move /sys  "$NEWROOT/sys"  2>/dev/null
 mount -t tmpfs tmpfs "$NEWROOT/tmp" 2>/dev/null
+# devpts: needed for pseudo-terminals (e.g. dropbear/ssh sessions, `script`,
+# tmux). Without it ssh logins fail with "PTY allocation request failed".
+mkdir -p "$NEWROOT/dev/pts"
+mount -t devpts -o gid=5,mode=620,ptmxmode=666 devpts "$NEWROOT/dev/pts" 2>/dev/null
+# Route /dev/ptmx to the mounted devpts instance — the static devtmpfs ptmx node
+# isn't tied to it, so UNIX98 PTY allocation (posix_openpt) otherwise fails.
+ln -sf /dev/pts/ptmx "$NEWROOT/dev/ptmx" 2>/dev/null
 
 # Optional host<->guest 9p share — present only if tug was launched with -S dir
 # (tag "tugshare"). Mount under the new root so it survives switch_root; harmless
