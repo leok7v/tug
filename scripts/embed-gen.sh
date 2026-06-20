@@ -18,7 +18,11 @@ export PATH="$BREW/opt/cpio/bin:$BREW/opt/findutils/libexec/gnubin:$PATH"
 # interactive rootfs = mkroot fs with our tug-init as /init
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cp -a "$ROOTFS_FS"/. "$W"/
+chmod -R u+w "$W"
 cp "$TUG_INIT" "$W"/init && chmod +x "$W"/init
+if [ -n "${TUG_BASH:-}" ] && [ -f "$TUG_BASH" ]; then
+    cp "$TUG_BASH" "$W"/usr/bin/bash && chmod 755 "$W"/usr/bin/bash
+fi
 ( cd "$W" && find . | cpio -o -H newc -R +0:+0 2>/dev/null | gzip ) > "$OUT_CPIO"
 
 # Mach-O assembly: bake the three blobs into the read-only const section.

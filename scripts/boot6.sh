@@ -25,6 +25,10 @@ export PATH="$BREW/opt/cpio/bin:$BREW/opt/findutils/libexec/gnubin:$PATH"
 # a human at a real terminal gets a proper shell from tug-init).
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 cp -a "$ROOTFS_DIR"/. "$WORK"/
+chmod -R u+w "$WORK"
+if [ -n "${TUG_BASH:-}" ] && [ -f "$TUG_BASH" ]; then
+    cp "$TUG_BASH" "$WORK"/usr/bin/bash && chmod 755 "$WORK"/usr/bin/bash
+fi
 if [ "$MODE" = test ]; then
     cat > "$WORK"/init <<'EOF'
 #!/bin/sh

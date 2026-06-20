@@ -31,6 +31,11 @@ cat <<EOF
 
 EOF
 
+# Prefer bash (readline: arrows, history, tab-completion) if present; toybox sh
+# (its pending/ shell) has no line editing, so fall back only if bash is absent.
+SH=/bin/sh; [ -x /bin/bash ] && SH=/bin/bash
+export SHELL="$SH"
+
 # Interactive shell with a proper controlling terminal on the active console.
-setsid -c <>/dev/"$(sed '$s@.*[ /]@@' /sys/class/tty/console/active)" >&0 2>&1 /bin/sh
+setsid -c <>/dev/"$(sed '$s@.*[ /]@@' /sys/class/tty/console/active)" >&0 2>&1 "$SH"
 poweroff -f
