@@ -90,17 +90,19 @@ is permitted. Agent-generated in-guest code still flows through the interpreter.
 
 ## 4a. Near-term priorities (do next)
 
-**[HIGH] virtio-block write path: drop per-write `fflush`.**
-`tug_block_device_init` in `src/tug.c` currently calls `fflush()` on *every*
-`write_async`. Seeding the Alpine userland onto `/dev/vda` is thousands of small
-file writes, each forced synchronously to host disk under the interpreter — so
-first-boot seeding takes **minutes instead of seconds**, and `apk add` of large
-toolchains (clang/rust) would be punishingly slow. Fix: buffer writes and flush
-only on guest `sync`/flush requests and at exit (or `mmap` the image / use
-`O_DIRECT`-free buffered IO without the forced flush). This is a cheap change
-with an outsized payoff for the whole apk-on-disk workflow — land it before the
-`apk-integration` branch merges. Verified working but slow via
-`make apkboot MODE=test` (mount + seed + `apk` all PASS).
+**[DONE] virtio-block write path: drop per-write `fflush`.**
+`tug_block_device_init` in `src/tug.c` previously used buffered stdio with an
+`fflush()` after *every* `write_async`. Random-access block IO defeats a stdio
+buffer (each `fseek` flushes it) and the forced flush made seeding the Alpine
+userland and `apk` crawl under the interpreter. Fixed: raw `pread`/`pwrite` into
+the host page cache (fast, durable across a normal exit), `fsync` once at exit.
+Considered `mmap(MAP_SHARED)` over the pre-sized image (read/write become pure
+memcpy, marginally faster) but rejected as the default: on our *sparse, growing*
+disk a host-disk-full condition would surface as **SIGBUS** (hard crash) during
+writeback, whereas `pwrite` returns a clean `-ENOSPC` the guest sees as an IO
+error. `mmap` remains a possible opt-in if we ever add a SIGBUS handler /
+preallocation. (`temu.c`'s backend, used only by `make apkboot`'s test, never
+had the per-write flush.)
 
 Follow-ups (lower): virtio-block **discard/TRIM** passthrough so deleting guest
 files punches holes and the sparse `tug.img` can shrink (today it only grows);
