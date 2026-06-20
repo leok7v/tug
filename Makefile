@@ -11,9 +11,11 @@
 #   (toolchain / headers / tcc / rootfs / ext2 / payload / bootfs)
 #
 # Third-party sources are downloaded/cloned into ./vendors/ (gitignored). macOS
-# portability for TinyEMU lives in ./compat/ shims so the vendored source stays
-# pristine. The guest-payload build needs a GNU userland on macOS — run
-# `make deps` once (installs Homebrew GNU tools).
+# build portability for TinyEMU lives in ./compat/ shims; functional changes to
+# the emulator live as patches in ./patches/ (applied on extract) — currently
+# tinyemu-rdtime.patch, which implements the unprivileged `time` CSR (rdtime) the
+# 2019 release lacks, required to boot Linux 6.x userspace. The guest-payload
+# build needs a GNU userland on macOS — run `make deps` once (Homebrew GNU tools).
 #
 # NOTE: building our own *kernel* is deferred (see `make kernel`). A native macOS
 # kernel build hits open-ended host-tool issues; the plan is a Linux container
@@ -130,9 +132,11 @@ $(IMAGE_TGZ):
 
 build: $(TEMU)
 
-$(TEMU): $(TINYEMU_TGZ)
+$(TEMU): $(TINYEMU_TGZ) $(wildcard patches/tinyemu-*.patch)
 	rm -rf $(TINYEMU_DIR) && mkdir -p $(TINYEMU_DIR)
 	tar xzf $(TINYEMU_TGZ) -C $(TINYEMU_DIR) --strip-components=1
+	@for p in $(CURDIR)/patches/tinyemu-*.patch; do \
+	  echo "applying $$p"; patch -d $(TINYEMU_DIR) -p1 < "$$p" || exit 1; done
 	$(MAKE) -C $(TINYEMU_DIR) temu CC='$(TEMU_CC)' $(TEMU_CONFIG) EMU_LIBS='$(TEMU_LIBS)'
 	@echo "built: $(TEMU)"
 

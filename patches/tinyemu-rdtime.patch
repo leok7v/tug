@@ -1,0 +1,15 @@
+--- a/riscv_cpu.c
++++ b/riscv_cpu.c
+@@ -728,6 +728,12 @@
+         val = s->fflags | (s->frm << 5);
+         break;
+ #endif
++    case 0xc01: /* utime: real hardware implements rdtime; without it Linux 6.x
++                   userspace (musl) traps to SIGILL. Return the CLINT mtime value
++                   (insn_counter / RTC_FREQ_DIV, where RTC_FREQ_DIV=16).
++                   Read unconditionally — TinyEMU does not track s?counteren TM. */
++        val = (int64_t)(s->insn_counter / 16);
++        break;
+     case 0xc00: /* ucycle */
+     case 0xc02: /* uinstret */
+         {
