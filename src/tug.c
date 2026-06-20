@@ -54,15 +54,31 @@ extern const unsigned char tug_initrd_start[], tug_initrd_end[];
 /* ----------------------------------------------------------- block device */
 /* A read/write file-backed virtio-block device. temu.c has an equivalent, but
  * it is `static` there and temu.o is excluded from this link, so tug carries
- * its own minimal implementation (synchronous read/write, no snapshot). This
- * backs the persistent /dev/vda data disk that holds the Alpine apk userland. */
+ * its own minimal implementation. This backs the persistent /dev/vda data disk
+ * that holds the Alpine apk userland.
+ *
+ * IO goes through raw pread/pwrite on the fd (NOT buffered stdio): random-access
+ * block IO defeats a stdio buffer (every seek to a new offset flushes it), and
+ * an fflush-per-write made seeding the rootfs / `apk` painfully slow. pwrite
+ * lands in the host page cache — fast, and durable across a normal tug exit
+ * (the kernel writes it back). TinyEMU's virtio-blk ignores guest FLUSH
+ * requests and BlockDevice has no flush hook, so for crash durability we fsync
+ * once at exit (see tug_block_sync_atexit). */
 
 #define TUG_SECTOR_SIZE 512
 
 typedef struct {
-    FILE *f;
+    int fd;
     int64_t nb_sectors;
 } TugBlockFile;
+
+static int tug_block_fd = -1;   /* single data disk; fsync'd at exit */
+
+static void tug_block_sync_atexit(void)
+{
+    if (tug_block_fd >= 0)
+        fsync(tug_block_fd);
+}
 
 static int64_t tug_bf_get_sector_count(BlockDevice *bs)
 {
@@ -74,12 +90,16 @@ static int tug_bf_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf,
                              int n, BlockDeviceCompletionFunc *cb, void *opaque)
 {
     TugBlockFile *bf = bs->opaque;
-    if (!bf->f)
+    size_t len = (size_t)n * TUG_SECTOR_SIZE;
+    off_t off = (off_t)sector_num * TUG_SECTOR_SIZE;
+    ssize_t r;
+    if (bf->fd < 0)
         return -1;
-    fseeko(bf->f, (off_t)sector_num * TUG_SECTOR_SIZE, SEEK_SET);
-    if (fread(buf, 1, (size_t)n * TUG_SECTOR_SIZE, bf->f) != (size_t)n * TUG_SECTOR_SIZE) {
-        /* reads past EOF of a sparse file return zeros, not an error */
-    }
+    r = pread(bf->fd, buf, len, off);
+    if (r < 0)
+        return -1;
+    if ((size_t)r < len)           /* short read at a hole/EOF: zero the rest */
+        memset(buf + r, 0, len - r);
     return 0; /* synchronous */
 }
 
@@ -88,11 +108,12 @@ static int tug_bf_write_async(BlockDevice *bs, uint64_t sector_num,
                               BlockDeviceCompletionFunc *cb, void *opaque)
 {
     TugBlockFile *bf = bs->opaque;
-    if (!bf->f)
+    size_t len = (size_t)n * TUG_SECTOR_SIZE;
+    off_t off = (off_t)sector_num * TUG_SECTOR_SIZE;
+    if (bf->fd < 0)
         return -1;
-    fseeko(bf->f, (off_t)sector_num * TUG_SECTOR_SIZE, SEEK_SET);
-    fwrite(buf, 1, (size_t)n * TUG_SECTOR_SIZE, bf->f);
-    fflush(bf->f);
+    if (pwrite(bf->fd, buf, len, off) != (ssize_t)len)
+        return -1;             /* no per-write flush: page cache + fsync at exit */
     return 0; /* synchronous */
 }
 
@@ -100,26 +121,28 @@ static BlockDevice *tug_block_device_init(const char *filename)
 {
     BlockDevice *bs;
     TugBlockFile *bf;
-    FILE *f;
-    int64_t file_size;
+    int fd;
+    off_t file_size;
 
-    f = fopen(filename, "r+b");
-    if (!f) {
+    fd = open(filename, O_RDWR);
+    if (fd < 0) {
         fprintf(stderr, "tug: cannot open data disk %s: %s\n",
                 filename, strerror(errno));
         return NULL;
     }
-    fseeko(f, 0, SEEK_END);
-    file_size = ftello(f);
+    file_size = lseek(fd, 0, SEEK_END);
 
     bs = mallocz(sizeof(*bs));
     bf = mallocz(sizeof(*bf));
-    bf->f = f;
+    bf->fd = fd;
     bf->nb_sectors = file_size / TUG_SECTOR_SIZE;
     bs->opaque = bf;
     bs->get_sector_count = tug_bf_get_sector_count;
     bs->read_async = tug_bf_read_async;
     bs->write_async = tug_bf_write_async;
+
+    tug_block_fd = fd;
+    atexit(tug_block_sync_atexit);
     return bs;
 }
 
