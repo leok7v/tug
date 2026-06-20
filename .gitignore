@@ -4,3 +4,4 @@
 
 # orchestrator build artifact
 /tug
+/tug.dSYM/
