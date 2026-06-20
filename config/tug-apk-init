@@ -89,7 +89,7 @@ if [ -t 0 ]; then
   echo "  setup:    run 'essentials' to install the dev toolchain (build-base clang node python ...)"
   echo "  packages: apk update && apk add <pkg>   e.g.  build-base clang  nodejs npm  python3 py3-pip  cargo"
   echo "  storage:  persistent /  on /dev/vda ($(df -h / 2>/dev/null | awk 'NR==2{print $2}'))   scratch: /tmp"
-  echo "  ssh:      run 'tug-sshd' here, launch tug with '-L 2222:22', then ssh -p 2222 root@127.0.0.1"
+  echo "  ssh:      tug -L 2222:22 -S <dir-with-your.pub>;  run 'tug-sshd';  ssh -p 2222 root@127.0.0.1"
   echo "  keys:     Ctrl-C -> guest;  Ctrl-C x3 then again -> quit tug;  poweroff -> shutdown"
   echo
 fi
@@ -148,18 +148,36 @@ chmod +x "$NEWROOT/usr/local/bin/essentials"
 # with  -L 2222:22  then  ssh -p 2222 root@127.0.0.1  (forward is 127.0.0.1-only).
 cat > "$NEWROOT/usr/local/bin/tug-sshd" <<'SSHD'
 #!/bin/sh
-# tug-sshd — bring up dropbear SSH on guest :22 (pairs with `tug -L 2222:22`).
-apk info -e dropbear >/dev/null 2>&1 || { echo "tug-sshd: installing dropbear..."; apk update && apk add dropbear; }
-# root password for password auth (sandbox-local; only reachable via the host -L
-# forward on 127.0.0.1). Default 'tug' unless one is already set.
-if ! grep -q '^root:[^:!*]' /etc/shadow 2>/dev/null; then
-  echo "root:tug" | chpasswd 2>/dev/null && echo "tug-sshd: root password set to 'tug' (change: passwd)"
+# tug-sshd — bring up openssh on guest :22 with KEY auth (pairs with `tug -L 2222:22`).
+# Authorizes any *.pub (or an authorized_keys) found in the host 9p share /mnt/share,
+# so you ssh in with your existing key — no passwords (Alpine's busybox passwd hash
+# isn't reliably verifiable by openssh, and key auth is what works + is safer here).
+apk info -e openssh-server >/dev/null 2>&1 || { echo "tug-sshd: installing openssh..."; apk update && apk add openssh-server; }
+ssh-keygen -A >/dev/null 2>&1            # host keys (persist on the data disk)
+mkdir -p /root/.ssh /run/sshd; chmod 700 /root/.ssh
+# import host pubkeys delivered via the 9p share (tug -S <dir-with-your.pub>)
+imported=0
+for f in /mnt/share/*.pub /mnt/share/authorized_keys; do
+    [ -f "$f" ] || continue
+    cat "$f" >> /root/.ssh/authorized_keys 2>/dev/null && imported=1
+done
+if [ "$imported" = 1 ]; then
+    sort -u /root/.ssh/authorized_keys -o /root/.ssh/authorized_keys
+    chmod 600 /root/.ssh/authorized_keys
 fi
-mkdir -p /etc/dropbear
-pkill dropbear 2>/dev/null
-/usr/sbin/dropbear -R -p 22   # auto-creates host keys; daemonizes
-echo "tug-sshd: dropbear on guest :22.  From host (launch tug with -L 2222:22):"
-echo "          ssh -p 2222 root@127.0.0.1   (password: tug)"
+# root key login (default is prohibit-password, which allows keys; be explicit)
+grep -qE '^[[:space:]]*PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null \
+    || echo 'PermitRootLogin prohibit-password' >> /etc/ssh/sshd_config
+pkill -x sshd 2>/dev/null
+/usr/sbin/sshd
+echo "tug-sshd: openssh on guest :22.  From host (launch tug with -L 2222:22):"
+if [ "$imported" = 1 ]; then
+    echo "          ssh -p 2222 root@127.0.0.1   (key auth: $(grep -c . /root/.ssh/authorized_keys) authorized key(s) from /mnt/share)"
+else
+    echo "          no key imported. share your pubkey with the guest and re-run, e.g.:"
+    echo "            host:  cp ~/.ssh/id_ed25519.pub <dir>; tug ... -S <dir>"
+    echo "            then:  re-run tug-sshd   (it authorizes /mnt/share/*.pub)"
+fi
 SSHD
 chmod +x "$NEWROOT/usr/local/bin/tug-sshd"
 
