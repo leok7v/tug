@@ -82,10 +82,14 @@ echo APK_TEST_COMPLETE
 # apk update over slirp NAT + TLS — informational only (best effort; it is slow
 # under the interpreter and network may be unavailable in CI). Bounded so it
 # can't wedge the run.
-if timeout 150 chroot /mnt /sbin/apk update --no-progress 2>&1 | tail -2; then
-    echo APK_UPDATE_DONE
+# apk update over slirp NAT + TLS. Informational (network may be absent in CI),
+# but no longer hidden behind `timeout|tail`: when the host is not thrashing the
+# disk (e.g. macOS locate.updatedb), this fetches both indexes in a few seconds.
+echo "APK_UPDATE_START up=$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+if chroot /mnt /sbin/apk update 2>&1; then
+    echo "APK_UPDATE_DONE up=$(cut -d. -f1 /proc/uptime 2>/dev/null)"
 else
-    echo APK_UPDATE_SKIPPED
+    echo "APK_UPDATE_FAIL rc=$?"
 fi
 sync
 poweroff -f
