@@ -8,7 +8,7 @@
  *
  * The console glue and run loop are adapted from TinyEMU's temu.c (MIT).
  *
- * Usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hp:gp] [-b] <bbl.bin> <Image> [initrd.cpio.gz]
+ * Usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hp:gp] [-S dir] [-b] <bbl.bin> <Image> [initrd.cpio.gz]
  *   -m MB        guest RAM in MiB (default 256)
  *   -a cmdline   kernel command line (default "console=hvc0")
  *   -d disk.img  attach a raw image as virtio-block /dev/vda (persistent disk).
@@ -16,6 +16,8 @@
  *                (or $TUG_DISK) when present; -d overrides; -d "" disables.
  *   -L hp:gp     forward host 127.0.0.1:hp -> guest:gp (TCP; repeatable). e.g.
  *                -L 2222:22 then `ssh -p 2222 root@127.0.0.1` (run `tug-sshd` in guest).
+ *   -S dir       share host directory `dir` into the guest via 9p (tag "tugshare";
+ *                guest auto-mounts it at /mnt/share) for live file exchange.
  *   -b           benchmark: report boot wall-time + peak RSS on exit (to stderr)
  */
 #include <stdio.h>
@@ -41,7 +43,7 @@ int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
 
 #include "cutils.h"
 #include "iomem.h"
-#include "virtio.h"
+#include "virtio.h"  /* also pulls in fs.h: fs_disk_init for the -S 9p share */
 #include "machine.h"
 #ifdef CONFIG_SLIRP
 #include "slirp/libslirp.h"
@@ -493,15 +495,17 @@ int main(int argc, char **argv)
     const char *cmdline = "console=hvc0 virtio_net.napi_tx=false";
     const char *disk_path = NULL;   /* -d: explicit data disk image */
     BOOL disk_explicit = FALSE;     /* whether -d was given (even as "") */
+    const char *share_dir = NULL;   /* -S: host dir shared into the guest via 9p */
     uint64_t ram_mb = 256;
     BOOL benchmark = FALSE;
     int c, len;
 
-    while ((c = getopt(argc, argv, "m:a:d:L:b")) != -1) {
+    while ((c = getopt(argc, argv, "m:a:d:L:S:b")) != -1) {
         switch (c) {
         case 'm': ram_mb = strtoull(optarg, NULL, 0); break;
         case 'a': cmdline = optarg; break;
         case 'd': disk_path = optarg; disk_explicit = TRUE; break;
+        case 'S': share_dir = optarg; break;  /* host dir -> guest 9p (tag "tugshare") */
         case 'L': {  /* host_port:guest_port TCP forward (e.g. 2222:22 for ssh) */
             int hp = 0, gp = 0;
             if (sscanf(optarg, "%d:%d", &hp, &gp) == 2 && hp > 0 && gp > 0
@@ -517,7 +521,7 @@ int main(int argc, char **argv)
         }
         case 'b': benchmark = TRUE; break;
         default:
-            fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-b] bbl.bin Image [initrd]\n");
+            fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-S dir] [-b] bbl.bin Image [initrd]\n");
             return 1;
         }
     }
@@ -546,7 +550,7 @@ int main(int argc, char **argv)
             p->files[VM_FILE_INITRD].len = len;
         }
     } else {
-        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-b] bbl.bin Image [initrd]\n");
+        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-S dir] [-b] bbl.bin Image [initrd]\n");
         return 1;
     }
     vm_add_cmdline(p, cmdline);
@@ -561,6 +565,22 @@ int main(int argc, char **argv)
     p->tab_eth[0].net = slirp_open();
     p->eth_count = p->tab_eth[0].net ? 1 : 0;
 #endif
+
+    /* -S hostdir: share a host directory into the guest as a virtio-9p device.
+     * The guest mounts it (tag "tugshare") for live host<->guest file exchange;
+     * the machine creates the virtio-9p device from tab_fs. */
+    if (share_dir) {
+        FSDevice *fs = fs_disk_init(share_dir);
+        if (!fs) {
+            fprintf(stderr, "tug: -S '%s' must be an existing directory\n", share_dir);
+            return 1;
+        }
+        p->tab_fs[0].fs_dev = fs;
+        p->tab_fs[0].tag = strdup("tugshare");
+        p->fs_count = 1;
+        fprintf(stderr, "tug: sharing host dir %s as 9p (guest: mount -t 9p "
+                "-o trans=virtio tugshare /mnt/share)\n", share_dir);
+    }
 
     /* Persistent data disk -> virtio-block /dev/vda. Explicit -d wins; for
      * tug-embedded, fall back to $TUG_DISK or "tug-data.img" beside the binary

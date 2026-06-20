@@ -1,0 +1,26 @@
+TinyEMU 9p: clamp client msize to the fixed buffer capacity (8192).
+
+The version handler set s->msize to the client's requested msize with no
+clamp; TinyEMU's Tread/Treaddir responses use fixed buffers sized for the
+default 8192. A client mounting with a larger msize (e.g. msize=131072)
+overruns those buffers and hangs the guest on the first real read while the
+small attach/getattr ops during mount still succeed. Clamp to 8192.
+
+--- a/virtio.c
++++ b/virtio.c
+@@ -2456,9 +2456,14 @@
+         {
+             uint32_t msize;
+             char *version;
+-            if (unmarshall(s, queue_idx, desc_idx, &offset, 
++            if (unmarshall(s, queue_idx, desc_idx, &offset,
+                            "ws", &msize, &version))
+                 goto protocol_error;
++            /* tug: clamp to our fixed 9p buffer capacity. Accepting a larger
++             * client-requested msize overruns the fixed Tread/Treaddir response
++             * buffers and hangs the guest on the first real read. */
++            if (msize > 8192)
++                msize = 8192;
+             s->msize = msize;
+             //            printf("version: msize=%d version=%s\n", msize, version);
+             free(version);

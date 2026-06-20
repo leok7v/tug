@@ -206,6 +206,16 @@ mount --move /proc "$NEWROOT/proc" 2>/dev/null
 mount --move /sys  "$NEWROOT/sys"  2>/dev/null
 mount -t tmpfs tmpfs "$NEWROOT/tmp" 2>/dev/null
 
+# Optional host<->guest 9p share — present only if tug was launched with -S dir
+# (tag "tugshare"). Mount under the new root so it survives switch_root; harmless
+# (silent) when no share device exists.
+mkdir -p "$NEWROOT/mnt/share"
+# msize=8192 matches TinyEMU's fixed 9p buffer; a larger msize overruns its
+# response buffers and hangs the first read.
+if mount -t 9p -o trans=virtio,version=9p2000.L,msize=8192 tugshare "$NEWROOT/mnt/share" 2>/dev/null; then
+  echo "  tug: host directory shared at /mnt/share (9p)"
+fi
+
 exec switch_root "$NEWROOT" /sbin/tug-login
 # if switch_root failed, don't leave pid1 dead
 echo "tug: switch_root failed; dropping to toybox shell"
