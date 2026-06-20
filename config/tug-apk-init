@@ -56,9 +56,15 @@ if [ ! -x "$NEWROOT/sbin/apk" ]; then
     # /etc/apk/repositories ships in the minirootfs (main+community for this
     # release); leave it as-is. Ensure /etc/apk/keys came across.
     [ -d "$NEWROOT/etc/apk/keys" ] || echo "  tug: WARNING /etc/apk/keys missing"
+    echo "  tug: Alpine seeded. apk userland is now persistent on /dev/vda."
+fi
 
-    # tug welcome banner shown on every interactive bash/ash login
-    cat > "$NEWROOT/etc/profile.d/tug.sh" <<'BANNER'
+# --- login shell + welcome banner (idempotent, every boot) ------------------
+# Created here rather than only inside the first-boot seed block so a disk that
+# was populated by something other than this init (e.g. the apkboot test
+# harness, or a future re-seed) still gets a /sbin/tug-login for switch_root to
+# exec. Cheap to rewrite each boot; the banner's __DISKSIZE__ is filled below.
+cat > "$NEWROOT/etc/profile.d/tug.sh" <<'BANNER'
 # tug welcome banner
 if [ -t 0 ]; then
   echo
@@ -69,9 +75,8 @@ if [ -t 0 ]; then
   echo
 fi
 BANNER
-
-    # tug login shell: prefer bash if installed (apk add bash), else ash.
-    cat > "$NEWROOT/sbin/tug-login" <<'LOGIN'
+# tug login shell: prefer bash if installed (apk add bash), else ash.
+cat > "$NEWROOT/sbin/tug-login" <<'LOGIN'
 #!/bin/sh
 export HOME=/root TERM=vt100 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 cd /root 2>/dev/null || cd /
@@ -79,9 +84,7 @@ SH=/bin/ash; [ -x /bin/bash ] && SH=/bin/bash
 export SHELL="$SH"
 exec setsid -c <>/dev/console >&0 2>&1 "$SH" -l
 LOGIN
-    chmod +x "$NEWROOT/sbin/tug-login"
-    echo "  tug: Alpine seeded. apk userland is now persistent on /dev/vda."
-fi
+chmod +x "$NEWROOT/sbin/tug-login"
 
 # --- always-refresh runtime bits (cheap; keeps DNS/CA correct) --------------
 echo 'nameserver 10.0.2.3' > "$NEWROOT/etc/resolv.conf" 2>/dev/null
