@@ -86,7 +86,8 @@ cat > "$NEWROOT/etc/profile.d/tug.sh" <<'BANNER'
 if [ -t 0 ]; then
   echo
   echo "  tug — Alpine $(. /etc/os-release 2>/dev/null; echo "$VERSION_ID") riscv64 on TinyEMU"
-  echo "  packages: apk update && apk add <pkg>   e.g.  build-base binutils gcc clang  nodejs npm  python3 py3-pip  cargo"
+  echo "  setup:    run 'essentials' to install the dev toolchain (build-base clang node python ...)"
+  echo "  packages: apk update && apk add <pkg>   e.g.  build-base clang  nodejs npm  python3 py3-pip  cargo"
   echo "  storage:  persistent /  on /dev/vda ($(df -h / 2>/dev/null | awk 'NR==2{print $2}'))   scratch: /tmp"
   echo "  keys:     Ctrl-C -> guest;  Ctrl-C x3 then again -> quit tug;  poweroff -> shutdown"
   echo
@@ -102,6 +103,66 @@ export SHELL="$SH"
 exec setsid -c <>/dev/console >&0 2>&1 "$SH" -l
 LOGIN
 chmod +x "$NEWROOT/sbin/tug-login"
+
+# `essentials`: idempotent installer for the agentic dev toolchain set. Only adds
+# what's missing; `-c` checks, `-y` is non-interactive (for agents), or pass
+# group names (core cpp js py extras).
+mkdir -p "$NEWROOT/usr/local/bin"
+cat > "$NEWROOT/usr/local/bin/essentials" <<'ESS'
+#!/bin/sh
+# tug essentials — install the dev toolchain via apk, idempotently.
+# Usage: essentials [-y|-c] [group...]   groups: core cpp js py extras (default: all)
+#   core=build-base(gcc/binutils/make/musl-dev)  cpp=clang  js=nodejs+npm+typescript
+#   py=python3+pip  extras=git+vim+curl   |  -y: no prompt   -c: check only (exit 1 if missing)
+g_core="build-base"; g_cpp="clang"; g_js="nodejs npm"; g_py="python3 py3-pip"; g_extras="git vim curl"
+ALL="core cpp js py extras"; YES=0; CHECK=0; GROUPS=""
+for a in "$@"; do case "$a" in
+  -y|--yes) YES=1 ;; -c|--check) CHECK=1 ;;
+  core|cpp|js|py|extras) GROUPS="$GROUPS $a" ;;
+  *) echo "essentials: unknown arg '$a' (groups: $ALL)"; exit 2 ;;
+esac; done
+[ -n "$GROUPS" ] || GROUPS="$ALL"
+pkgs=""; for grp in $GROUPS; do eval "pkgs=\"\$pkgs \$g_$grp\""; done
+missing=""; for p in $pkgs; do apk info -e "$p" >/dev/null 2>&1 || missing="$missing $p"; done
+missing="$(echo $missing)"
+want_ts=0; case " $GROUPS " in *" js "*) command -v tsc >/dev/null 2>&1 || want_ts=1 ;; esac
+if [ -z "$missing" ] && [ "$want_ts" = 0 ]; then
+  [ "$CHECK" = 1 ] || echo "essentials: all selected toolchains already installed."
+  exit 0
+fi
+[ "$CHECK" = 1 ] && exit 1
+[ -n "$missing" ] && echo "essentials: will apk add:$missing"
+[ "$want_ts" = 1 ] && echo "essentials: will npm i -g typescript"
+if [ "$YES" != 1 ]; then
+  printf "Proceed? (hundreds of MB, several min under the emulator) [Y/n] "
+  read ans; case "$ans" in [Nn]*) echo "skipped — run 'essentials' anytime."; exit 0 ;; esac
+fi
+[ -n "$missing" ] && { apk update && apk add $missing; }
+[ "$want_ts" = 1 ] && command -v npm >/dev/null 2>&1 && npm install -g typescript
+echo "essentials: done."
+ESS
+chmod +x "$NEWROOT/usr/local/bin/essentials"
+
+# First-login hook: offer the toolchain set ONCE per disk (only if something is
+# missing). Decline is remembered (marker) so it never nags again. zz- so it runs
+# after the tug.sh banner.
+cat > "$NEWROOT/etc/profile.d/zz-essentials.sh" <<'HOOK'
+# tug: offer to install dev toolchains on first interactive login.
+if [ -t 0 ] && command -v essentials >/dev/null 2>&1; then
+  _m="${HOME:-/root}/.config/tug/essentials-asked"
+  if [ ! -f "$_m" ] && ! essentials -c >/dev/null 2>&1; then
+    mkdir -p "$(dirname "$_m")" 2>/dev/null; : > "$_m"
+    echo
+    echo "  tug: dev toolchains aren't installed yet (build-base clang node python git vim)."
+    printf "  Install them now? ~hundreds of MB, a few min under the emulator [Y/n] "
+    read _a
+    case "$_a" in [Nn]*) echo "  ok — run 'essentials' anytime (or 'essentials -y' to do it all)." ;;
+                  *) essentials -y ;; esac
+    echo
+  fi
+  unset _m _a
+fi
+HOOK
 
 # --- always-refresh runtime bits (cheap; keeps DNS/CA correct) --------------
 echo 'nameserver 10.0.2.3' > "$NEWROOT/etc/resolv.conf" 2>/dev/null
