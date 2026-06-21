@@ -482,18 +482,22 @@ final class Terminal {
 struct TerminalScreenView: View {
     let terminal: Terminal
     let focused: Bool
-    /// Called when the fitted grid size changes (cols fixed at `targetCols`).
+    /// Called when the fitted grid size (cols × rows) changes with the view.
     let onResize: (Int, Int) -> Void
 
-    private let targetCols = 80
+    // Constant font: resizing the window changes the grid geometry (cols × rows),
+    // not the glyph size. cell metrics are derived from the fixed font size.
+    private let fontSize: CGFloat = 12
     private let advance: CGFloat = 0.60      // monospaced glyph width / em
     private let lineFactor: CGFloat = 1.18
 
+    private var charW: CGFloat { fontSize * advance }
+    private var lineH: CGFloat { (fontSize * lineFactor).rounded() }
+
     var body: some View {
         GeometryReader { geo in
-            let fontSize = max(6, min(22, geo.size.width / (CGFloat(targetCols) * advance)))
-            let lineH = (fontSize * lineFactor).rounded()
-            let fitRows = max(4, min(80, Int(geo.size.height / lineH)))
+            let fitCols = max(20, min(400, Int(geo.size.width  / charW)))
+            let fitRows = max(4,  min(200, Int(geo.size.height / lineH)))
             let _ = terminal.version                          // observe updates
 
             Group {
@@ -525,8 +529,8 @@ struct TerminalScreenView: View {
                     .defaultScrollAnchor(.bottom)
                 }
             }
-            .onAppear { onResize(targetCols, fitRows) }
-            .onChange(of: fitRows) { _, n in onResize(targetCols, n) }
+            .onAppear { onResize(fitCols, fitRows) }
+            .onChange(of: geo.size) { _, _ in onResize(fitCols, fitRows) }
         }
     }
 
