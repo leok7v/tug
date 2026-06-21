@@ -142,7 +142,9 @@ struct TerminalView: View {
         .onAppear { focused = true }
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
-        .onKeyPress(phases: .down) { press in handle(press) }
+        // .down AND .repeat: macOS coalesces rapid/held presses into key-repeat
+        // events, so a .down-only handler swallows fast Return/key presses.
+        .onKeyPress(phases: [.down, .repeat]) { press in handle(press) }
     }
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
