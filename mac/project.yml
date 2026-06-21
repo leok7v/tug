@@ -33,6 +33,7 @@ targets:
       iOS: "17.0"
     sources:
       - Boat.swift
+      - Terminal.swift
       - Platform-iOS.swift
       - Platform-macOS.swift
       - Assets.xcassets

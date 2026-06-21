@@ -20,6 +20,7 @@
 		44B6ADDCEE63156B890BAB4C /* ip_output.c in Sources */ = {isa = PBXBuildFile; fileRef = B8AD3BA784A8FEF8C046EB76 /* ip_output.c */; };
 		51BD8AA7A24D90E008873C24 /* udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4082A9C2CE4BCCC6010646C1 /* udp.c */; };
 		5350FF3BC934304F2A43B2CC /* iomem.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A4239C56F6ADEC623DEFFCB /* iomem.c */; };
+		59295FCE32000FE846D970A7 /* Terminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6ED03730645A8A39B18FFAF /* Terminal.swift */; };
 		629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */ = {isa = PBXBuildFile; fileRef = 49E8154B5452F8FE73CD7547 /* bootp.c */; };
 		70747F186000D73B4D8C5F11 /* json.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0BDCA7ACFAB72B09C71A9B /* json.c */; };
 		71675414BA1576C67B0E994E /* tcp_output.c in Sources */ = {isa = PBXBuildFile; fileRef = 4CB65DECA09580727F861A59 /* tcp_output.c */; };
@@ -75,6 +76,7 @@
 		B8AD3BA784A8FEF8C046EB76 /* ip_output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ip_output.c; sourceTree = "<group>"; };
 		BCB507E11D82D11A4347C986 /* misc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = misc.c; sourceTree = "<group>"; };
 		C03357C16A8315EA22C78820 /* softfp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = softfp.c; sourceTree = "<group>"; };
+		C6ED03730645A8A39B18FFAF /* Terminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Terminal.swift; sourceTree = "<group>"; };
 		C8E89EA84383DA3A3F77EB0F /* sbuf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sbuf.c; sourceTree = "<group>"; };
 		CDDD04597C4191DB90274992 /* riscv_cpu_xlen64.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = riscv_cpu_xlen64.c; sourceTree = "<group>"; };
 		CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_timer.c; sourceTree = "<group>"; };
@@ -131,6 +133,7 @@
 				457C7DBAF6151797012150AA /* Boat.swift */,
 				8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */,
 				EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */,
+				C6ED03730645A8A39B18FFAF /* Terminal.swift */,
 				10BBDFDBF44C40A186955419 /* payload */,
 				191A506E249754905F8D085B /* tug */,
 				58FD6468588C9AB286B51F28 /* Products */,
@@ -266,6 +269,7 @@
 				28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */,
 				16805CCC5001E80C76593E4E /* Platform-iOS.swift in Sources */,
 				441A285F18B5ACDAE1B45936 /* Platform-macOS.swift in Sources */,
+				59295FCE32000FE846D970A7 /* Terminal.swift in Sources */,
 				629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */,
 				FA0ACFD46219A913A05FA34C /* cksum.c in Sources */,
 				BBFBDC52FF47034902A09DA2 /* cutils.c in Sources */,

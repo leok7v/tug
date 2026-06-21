@@ -6,9 +6,9 @@
 // just the Terminal. Both also take a hardware (wired/Bluetooth) keyboard.
 //
 // `Console` drives the real tug RISC-V engine (src/tug.h) via `TugEngine`: the
-// guest boots on a background thread, its console bytes stream into `text`, and
-// keystrokes are forwarded as terminal bytes. Output is shown raw for now —
-// VT100/ANSI interpretation is a later pass.
+// guest boots on a background thread, its console bytes are parsed by the
+// VT100/xterm emulator in Terminal.swift into a cell grid, and keystrokes are
+// forwarded back as terminal bytes.
 
 import SwiftUI
 
@@ -35,60 +35,39 @@ enum KeyInput: Sendable {
     case up, down, left, right
 }
 
-// MARK: - Console (terminal buffer driven by the real tug engine)
+// MARK: - Console (VT100 terminal + the real tug engine)
 
 @MainActor @Observable
 final class Console {
-    private(set) var text = ""        // entire visible buffer (raw guest output)
-    private let maxChars = 400_000
+    let terminal = Terminal()
     private var engine: TugEngine?
 
-    init() { text = "[tug] booting…\r\n" }
+    init() { terminal.feedString("[tug] booting…\r\n") }
 
     /// Boot the RISC-V guest. Idempotent; called once from the view's onAppear.
     func start() {
         guard engine == nil else { return }
+        terminal.respond = { [weak self] bytes in self?.engine?.input(bytes) }
         let e = TugEngine(
             onOutput: { [weak self] bytes in
-                Task { @MainActor in self?.append(bytes) }
+                Task { @MainActor in self?.terminal.feed(bytes) }
             },
             onExit: { [weak self] status in
                 Task { @MainActor in
-                    self?.append(Array("\r\n[tug] guest powered off (status \(status))\r\n".utf8))
+                    self?.terminal.feedString("\r\n[tug] guest powered off (status \(status))\r\n")
                 }
             })
         engine = e
         e.start()
     }
 
-    /// Append raw guest bytes. Raw-bytes-first: decoded as UTF-8 and shown as-is
-    /// (VT100/ANSI escapes are not yet interpreted — that's a later pass).
-    private func append(_ bytes: [UInt8]) {
-        text += String(decoding: bytes, as: UTF8.self)
-        if text.count > maxChars { text.removeFirst(text.count - maxChars) }
-    }
-
     /// Feed a key from either keyboard to the guest as terminal bytes.
-    func send(_ key: KeyInput) { engine?.input(Self.bytes(for: key)) }
+    func send(_ key: KeyInput) { engine?.input(terminal.bytes(for: key)) }
 
-    /// Map a resolved key event to the bytes a terminal would send.
-    static func bytes(for key: KeyInput) -> [UInt8] {
-        switch key {
-        case .text(let s):  return Array(s.utf8)
-        case .enter:        return [0x0d]               // CR
-        case .backspace:    return [0x7f]               // DEL (readline/erase)
-        case .tab:          return [0x09]
-        case .esc:          return [0x1b]
-        case .up:           return [0x1b, 0x5b, 0x41]   // ESC [ A
-        case .down:         return [0x1b, 0x5b, 0x42]   // ESC [ B
-        case .right:        return [0x1b, 0x5b, 0x43]   // ESC [ C
-        case .left:         return [0x1b, 0x5b, 0x44]   // ESC [ D
-        case .ctrl(let c):
-            // Ctrl-<key> = the key's ASCII & 0x1f (Ctrl-A=1 … Ctrl-C=3 … Ctrl-Z=26)
-            guard let a = c.uppercased().unicodeScalars.first?.value, a >= 0x40, a <= 0x5f
-            else { return [] }
-            return [UInt8(a & 0x1f)]
-        }
+    /// Match the on-screen grid to the guest's terminal size.
+    func setSize(cols: Int, rows: Int) {
+        terminal.resize(cols: cols, rows: rows)
+        engine?.resize(cols: cols, rows: rows)
     }
 }
 
@@ -189,20 +168,11 @@ struct TerminalView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                Text(console.text + "▏")
-                    .font(.system(size: Term.fontSize, weight: .regular, design: .monospaced))
-                    .foregroundStyle(Term.fg)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .id("bottom")
-            }
-            .background(Term.bg)
-            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
-            .onChange(of: console.text) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+        TerminalScreenView(terminal: console.terminal, focused: focused) { cols, rows in
+            console.setSize(cols: cols, rows: rows)
         }
+        .padding(4)
+        .background(Term.bg)
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
