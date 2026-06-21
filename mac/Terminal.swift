@@ -75,6 +75,11 @@ final class Terminal {
     private(set) var cursorVisible = true
     private(set) var version = 0               // bumped after each feed (drives the view)
 
+    // Scrollback: lines that scroll off the top of the primary screen (not alt).
+    private(set) var scrollback: [[Cell]] = []
+    private(set) var onAlt = false             // alt screen: no scrollback, no scroll
+    private let maxScrollback = 2000
+
     /// Send bytes back to the guest (query replies: DSR cursor position, DA).
     var respond: (([UInt8]) -> Void)?
 
@@ -83,7 +88,6 @@ final class Terminal {
     private var savedCol = 0
     private var savedAttrs = CellAttrs()
     private var altGrid: [[Cell]]?             // primary screen stashed while on alt
-    private var onAlt = false
 
     private var attrs = CellAttrs()
     private var scrollTop = 0
@@ -270,6 +274,13 @@ final class Terminal {
     private func scrollUp(_ n: Int) {
         let n = min(n, scrollBot - scrollTop + 1)
         guard n > 0 else { return }
+        // lines leaving the top of a full-screen primary scroll go to scrollback
+        if scrollTop == 0 && !onAlt {
+            for r in 0..<n {
+                scrollback.append(grid[r])
+                if scrollback.count > maxScrollback { scrollback.removeFirst() }
+            }
+        }
         grid.removeSubrange(scrollTop ..< scrollTop + n)
         grid.insert(contentsOf: (0..<n).map { _ in Self.blankRow(cols, attrs) }, at: scrollBot - n + 1)
     }
@@ -485,23 +496,45 @@ struct TerminalScreenView: View {
             let fitRows = max(4, min(80, Int(geo.size.height / lineH)))
             let _ = terminal.version                          // observe updates
 
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<terminal.rows, id: \.self) { r in
-                    Text(line(r, fontSize: fontSize))
-                        .frame(height: lineH, alignment: .leading)
+            Group {
+                if terminal.onAlt {
+                    // Full-screen TUI (vi/less): fixed viewport, no scroll.
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<terminal.rows, id: \.self) { r in
+                            Text(line(terminal.grid[r], cursorRow: r, fontSize: fontSize))
+                                .frame(height: lineH, alignment: .leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } else {
+                    // Shell: scrollback above the live grid; pinned to the bottom
+                    // but scrollable up (trackpad / wheel) to read history.
+                    ScrollView(.vertical) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(terminal.scrollback.indices, id: \.self) { i in
+                                Text(line(terminal.scrollback[i], cursorRow: nil, fontSize: fontSize))
+                                    .frame(height: lineH, alignment: .leading)
+                            }
+                            ForEach(0..<terminal.rows, id: \.self) { r in
+                                Text(line(terminal.grid[r], cursorRow: r, fontSize: fontSize))
+                                    .frame(height: lineH, alignment: .leading)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    .defaultScrollAnchor(.bottom)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .onAppear { onResize(targetCols, fitRows) }
             .onChange(of: fitRows) { _, n in onResize(targetCols, n) }
         }
     }
 
-    /// Build one row as an AttributedString, grouping equal-attribute runs.
-    private func line(_ r: Int, fontSize: CGFloat) -> AttributedString {
-        guard r < terminal.grid.count else { return AttributedString(" ") }
-        let cells = terminal.grid[r]
-        let showCursor = focused && terminal.cursorVisible && r == terminal.cursorRow
+    /// Build one row (a `[Cell]`) as an AttributedString, grouping equal-attribute
+    /// runs. `cursorRow` is the row index when this is the live grid (nil for
+    /// scrollback) so the cursor cell is drawn inverse on the right line.
+    private func line(_ cells: [Cell], cursorRow: Int?, fontSize: CGFloat) -> AttributedString {
+        let showCursor = focused && terminal.cursorVisible && cursorRow == terminal.cursorRow
         var out = AttributedString()
         var i = 0
         while i < cells.count {
