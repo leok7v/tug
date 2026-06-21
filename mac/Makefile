@@ -5,6 +5,7 @@
 #   make mac        build the macOS app
 #   make ios        build for the iOS Simulator ($(SIM))
 #   make icons      regenerate the AppIcon set from $(ICON_SRC)  (needs ImageMagick)
+#   make lsp        regenerate the SourceKit-LSP config (fixes editor false errors)
 #   make open       open boat.xcodeproj in Xcode
 #   make clean
 
@@ -12,7 +13,7 @@ SIM ?= iPhone 17 Pro
 ICON_SRC ?= ../www/tug-icon.png
 ICONSET := Assets.xcassets/AppIcon.appiconset
 PAYLOAD := payload/bios.bin payload/kernel.bin payload/initrd.cgz payload/data.sparse
-.PHONY: all mac ios icons open clean payload
+.PHONY: all mac ios icons lsp open clean payload
 
 all: boat.xcodeproj
 
@@ -42,8 +43,22 @@ ios: boat.xcodeproj
 	  -destination 'platform=iOS Simulator,name=$(SIM)' \
 	  -configuration Debug build CODE_SIGNING_ALLOWED=NO
 
+# Regenerate the SourceKit-LSP config (buildServer.json + .compile) so the editor
+# resolves cross-file and per-platform symbols instead of showing false errors.
+# Both platform builds are parsed so each Platform-*.swift gets its own SDK's
+# flags (otherwise SourceKit sees both RootView definitions at once). The outputs
+# are machine-specific and gitignored — rerun after adding/removing source files,
+# then restart the build server / editor. Needs: brew install xcode-build-server
+lsp: boat.xcodeproj
+	@command -v xcode-build-server >/dev/null || { echo "need xcode-build-server (brew install xcode-build-server)"; exit 1; }
+	xcodebuild -project boat.xcodeproj -scheme Boat -destination 'platform=macOS' \
+	  -configuration Debug clean build CODE_SIGNING_ALLOWED=NO 2>&1 | xcode-build-server parse -a
+	xcodebuild -project boat.xcodeproj -scheme Boat -destination 'platform=iOS Simulator,name=$(SIM)' \
+	  -configuration Debug build CODE_SIGNING_ALLOWED=NO 2>&1 | xcode-build-server parse -a
+	@echo "LSP config regenerated — restart the build server / reopen the editor."
+
 open: boat.xcodeproj
 	open boat.xcodeproj
 
 clean:
-	rm -rf build DerivedData
+	rm -rf build Build DerivedData

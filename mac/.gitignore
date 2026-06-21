@@ -1,7 +1,11 @@
 # Xcode / build artifacts
 build/
+Build/
 DerivedData/
 *.xcuserstate
 xcuserdata/
 .DS_Store
+# SourceKit-LSP config — machine-specific (absolute paths + DerivedData hash);
+# regenerate with `make lsp` (like md.too / talking.frog).
 buildServer.json
+.compile
