@@ -46,6 +46,9 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+        # iPad: run full-screen (no multitasking) so iPadOS stops requiring all
+        # orientations — and the terminal gets the whole screen.
+        INFOPLIST_KEY_UIRequiresFullScreen: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_NSHumanReadableCopyright: "tug — MIT"
@@ -53,7 +56,9 @@ targets:
         "EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]": "Platform-iOS.swift"
         "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]": "Platform-macOS.swift"
         "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]": "Platform-macOS.swift"
-        # build/verify without a signing team (simulator + local macOS)
+        # Automatic signing so the app installs on a real device. Headless
+        # simulator/macOS verification (make mac / make ios) still passes
+        # CODE_SIGNING_ALLOWED=NO on the xcodebuild command line to skip it.
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGNING_REQUIRED: "NO"
-        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: "692R843P25"

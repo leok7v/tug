@@ -72,6 +72,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					1DF00BC66D35A29B79F7E58B = {
+						DevelopmentTeam = 692R843P25;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -251,10 +252,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 692R843P25;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift";
@@ -263,6 +263,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "tug — MIT";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -284,10 +285,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 692R843P25;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift";
@@ -296,6 +296,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "tug — MIT";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
