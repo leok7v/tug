@@ -10,9 +10,11 @@
 		16805CCC5001E80C76593E4E /* Platform-iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */; };
 		28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 457C7DBAF6151797012150AA /* Boat.swift */; };
 		441A285F18B5ACDAE1B45936 /* Platform-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */; };
+		D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 394DDAFE9197A3A054DF0B8A /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		394DDAFE9197A3A054DF0B8A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		457C7DBAF6151797012150AA /* Boat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Boat.swift; sourceTree = "<group>"; };
 		7290CE6E54C4591F1E054136 /* Boat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Boat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Platform-iOS.swift"; sourceTree = "<group>"; };
@@ -31,6 +33,7 @@
 		5A16A5BE79A8300EF0658FE0 = {
 			isa = PBXGroup;
 			children = (
+				394DDAFE9197A3A054DF0B8A /* Assets.xcassets */,
 				457C7DBAF6151797012150AA /* Boat.swift */,
 				8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */,
 				EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */,
@@ -46,6 +49,7 @@
 			buildConfigurationList = 1FD946C5628B4BCA6C361E56 /* Build configuration list for PBXNativeTarget "Boat" */;
 			buildPhases = (
 				C7D3322EF97C1C963EE3ED80 /* Sources */,
+				9063FC32CE5CAA5262B87F30 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -90,6 +94,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		9063FC32CE5CAA5262B87F30 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		C7D3322EF97C1C963EE3ED80 /* Sources */ = {

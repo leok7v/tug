@@ -35,10 +35,12 @@ targets:
       - Boat.swift
       - Platform-iOS.swift
       - Platform-macOS.swift
+      - Assets.xcassets
     settings:
       base:
         PRODUCT_NAME: Boat
         PRODUCT_BUNDLE_IDENTIFIER: dev.leok7v.boat
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Boat
         TARGETED_DEVICE_FAMILY: "1,2"
