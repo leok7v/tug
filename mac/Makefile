@@ -11,10 +11,18 @@
 SIM ?= iPhone 17 Pro
 ICON_SRC ?= ../www/tug-icon.png
 ICONSET := Assets.xcassets/AppIcon.appiconset
-.PHONY: all mac ios icons open clean
+PAYLOAD := payload/bios.bin payload/kernel.bin payload/initrd.cgz
+.PHONY: all mac ios icons open clean payload
+
 all: boat.xcodeproj
 
-boat.xcodeproj: project.yml Boat.swift Platform-iOS.swift Platform-macOS.swift
+# Guest payload bundled as app resources. Depends on the repo build artifacts
+# (run `make build embed` at the repo root first).
+payload: $(PAYLOAD)
+$(PAYLOAD): stage-payload.sh ../vendors/diskimage/bbl64.bin ../vendors/diskimage/Image-c2w ../generated/tug-embed.cpio.gz
+	bash stage-payload.sh
+
+boat.xcodeproj: project.yml Boat.swift Platform-iOS.swift Platform-macOS.swift Boat-Bridging.h $(PAYLOAD)
 	xcodegen generate
 
 # Generate every AppIcon size from one source image (icon is square, no alpha).

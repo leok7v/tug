@@ -14,3 +14,9 @@
 # persistent Alpine data disk (large; created by `make disk`)
 /tug-data.img
 *.img
+
+# Boat app: Xcode build output + staged payload resources (boat.xcodeproj is
+# tracked; regenerate with xcodegen / `make -C mac`).
+/mac/Build/
+/mac/DerivedData/
+/mac/payload/

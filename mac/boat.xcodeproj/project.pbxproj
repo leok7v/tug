@@ -7,21 +7,115 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		09E3ED20579739B43A02BD33 /* slirp.c in Sources */ = {isa = PBXBuildFile; fileRef = 89C951203F20E27FC407304D /* slirp.c */; };
+		0B36EC40A8D8348BAB86C6E8 /* kernel.bin in Resources */ = {isa = PBXBuildFile; fileRef = E91D39475AB672B65BEC731C /* kernel.bin */; };
 		16805CCC5001E80C76593E4E /* Platform-iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */; };
+		20A5CF7D3CAB177A5FF34E3B /* tcp_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 67D44662AA47880F7459743B /* tcp_input.c */; };
 		28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 457C7DBAF6151797012150AA /* Boat.swift */; };
+		2D5BEE5EF8B3F48364880153 /* bios.bin in Resources */ = {isa = PBXBuildFile; fileRef = 9B1E0F0233DC95696269490F /* bios.bin */; };
+		3EFC1867BE6BBE2D384840E5 /* sbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = C8E89EA84383DA3A3F77EB0F /* sbuf.c */; };
+		3F22AFB28D86EDF6A2D744B0 /* socket.c in Sources */ = {isa = PBXBuildFile; fileRef = D5B3756C2C3C2F7CDC67E6FB /* socket.c */; };
+		4249E589227E4E7AF0404B8A /* simplefb.c in Sources */ = {isa = PBXBuildFile; fileRef = E0F5EF75D5AE3549F393034F /* simplefb.c */; };
 		441A285F18B5ACDAE1B45936 /* Platform-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */; };
+		44B6ADDCEE63156B890BAB4C /* ip_output.c in Sources */ = {isa = PBXBuildFile; fileRef = B8AD3BA784A8FEF8C046EB76 /* ip_output.c */; };
+		51BD8AA7A24D90E008873C24 /* udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4082A9C2CE4BCCC6010646C1 /* udp.c */; };
+		5350FF3BC934304F2A43B2CC /* iomem.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A4239C56F6ADEC623DEFFCB /* iomem.c */; };
+		629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */ = {isa = PBXBuildFile; fileRef = 49E8154B5452F8FE73CD7547 /* bootp.c */; };
+		70747F186000D73B4D8C5F11 /* json.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0BDCA7ACFAB72B09C71A9B /* json.c */; };
+		71675414BA1576C67B0E994E /* tcp_output.c in Sources */ = {isa = PBXBuildFile; fileRef = 4CB65DECA09580727F861A59 /* tcp_output.c */; };
+		78ED91C0BB29DF3DD3926C3A /* mbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A9FC3EB113FD7E671487DA9 /* mbuf.c */; };
+		7B94173FEDB6CA985C249FC7 /* riscv_cpu_xlen64.c in Sources */ = {isa = PBXBuildFile; fileRef = CDDD04597C4191DB90274992 /* riscv_cpu_xlen64.c */; };
+		7D4699C93C733DD7F6BC15E5 /* fs.c in Sources */ = {isa = PBXBuildFile; fileRef = 5C397FCDC262AAC9EF73A50F /* fs.c */; };
+		8D9EA91CD6361D1A3BBB437F /* softfp.c in Sources */ = {isa = PBXBuildFile; fileRef = C03357C16A8315EA22C78820 /* softfp.c */; };
+		936789465766365FB125FF83 /* misc.c in Sources */ = {isa = PBXBuildFile; fileRef = BCB507E11D82D11A4347C986 /* misc.c */; };
+		A0175361E91D40697A485B73 /* tcp_subr.c in Sources */ = {isa = PBXBuildFile; fileRef = 96582C97AB84D477D612BA91 /* tcp_subr.c */; };
+		AF77F2D779029ADA49058407 /* ip_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 8A4B6412615D8F4FEE2AFE71 /* ip_input.c */; };
+		B880754ED760FD28743E3F32 /* virtio.c in Sources */ = {isa = PBXBuildFile; fileRef = 228A716A6790D53BA5ED4CD9 /* virtio.c */; };
+		BA27103E4E623A6F86C5A312 /* tcp_timer.c in Sources */ = {isa = PBXBuildFile; fileRef = CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */; };
+		BBFBDC52FF47034902A09DA2 /* cutils.c in Sources */ = {isa = PBXBuildFile; fileRef = 3383587608FB7AB4C0192E94 /* cutils.c */; };
+		C807D416828E43AE1B968E2A /* tug.c in Sources */ = {isa = PBXBuildFile; fileRef = ACA49E7D99059EEE6D5E2E5D /* tug.c */; };
+		D3C901BD8CD7F2C975BEF944 /* fs_disk.c in Sources */ = {isa = PBXBuildFile; fileRef = B5458C37C68D63CCE4D0F26A /* fs_disk.c */; };
 		D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 394DDAFE9197A3A054DF0B8A /* Assets.xcassets */; };
+		D8E62F72357C886AAFB293AA /* initrd.cgz in Resources */ = {isa = PBXBuildFile; fileRef = E339D89A8390F1A7FD9DBDAF /* initrd.cgz */; };
+		E2CBC7F1CAA76B817333442F /* riscv_cpu_xlen32.c in Sources */ = {isa = PBXBuildFile; fileRef = EE3558BA57EC7DC3C1F1A4B5 /* riscv_cpu_xlen32.c */; };
+		E6BB882A502B3BC2C0401E15 /* riscv_machine.c in Sources */ = {isa = PBXBuildFile; fileRef = ADF6A065643307B15C05E58D /* riscv_machine.c */; };
+		E8D3C0F8BE86B8CCBACA6015 /* ip_icmp.c in Sources */ = {isa = PBXBuildFile; fileRef = B64E6059E719D8DC361C31ED /* ip_icmp.c */; };
+		F76B6FC610AE5B99079C3939 /* pci.c in Sources */ = {isa = PBXBuildFile; fileRef = 862428A58CD6DC6C8FF43EF7 /* pci.c */; };
+		FA0ACFD46219A913A05FA34C /* cksum.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F055EBC07DAAE5A06316A03 /* cksum.c */; };
+		FB202D2455FB901CB197FDBF /* if.c in Sources */ = {isa = PBXBuildFile; fileRef = FA6D5BF8E2E658F6813229EF /* if.c */; };
+		FDF1F080434FF0A6C0C9361B /* machine.c in Sources */ = {isa = PBXBuildFile; fileRef = A98CA21D793C31A64BD22D7F /* machine.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1C0BDCA7ACFAB72B09C71A9B /* json.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json.c; sourceTree = "<group>"; };
+		228A716A6790D53BA5ED4CD9 /* virtio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = virtio.c; sourceTree = "<group>"; };
+		2F055EBC07DAAE5A06316A03 /* cksum.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cksum.c; sourceTree = "<group>"; };
+		3383587608FB7AB4C0192E94 /* cutils.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cutils.c; sourceTree = "<group>"; };
 		394DDAFE9197A3A054DF0B8A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4082A9C2CE4BCCC6010646C1 /* udp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = udp.c; sourceTree = "<group>"; };
 		457C7DBAF6151797012150AA /* Boat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Boat.swift; sourceTree = "<group>"; };
+		49E8154B5452F8FE73CD7547 /* bootp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bootp.c; sourceTree = "<group>"; };
+		4CB65DECA09580727F861A59 /* tcp_output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_output.c; sourceTree = "<group>"; };
+		5C397FCDC262AAC9EF73A50F /* fs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fs.c; sourceTree = "<group>"; };
+		67D44662AA47880F7459743B /* tcp_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_input.c; sourceTree = "<group>"; };
 		7290CE6E54C4591F1E054136 /* Boat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Boat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		862428A58CD6DC6C8FF43EF7 /* pci.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pci.c; sourceTree = "<group>"; };
+		89C951203F20E27FC407304D /* slirp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = slirp.c; sourceTree = "<group>"; };
+		8A4B6412615D8F4FEE2AFE71 /* ip_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ip_input.c; sourceTree = "<group>"; };
 		8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Platform-iOS.swift"; sourceTree = "<group>"; };
+		96582C97AB84D477D612BA91 /* tcp_subr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_subr.c; sourceTree = "<group>"; };
+		9A4239C56F6ADEC623DEFFCB /* iomem.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = iomem.c; sourceTree = "<group>"; };
+		9A9FC3EB113FD7E671487DA9 /* mbuf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mbuf.c; sourceTree = "<group>"; };
+		9B1E0F0233DC95696269490F /* bios.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = bios.bin; sourceTree = "<group>"; };
+		A98CA21D793C31A64BD22D7F /* machine.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = machine.c; sourceTree = "<group>"; };
+		ACA49E7D99059EEE6D5E2E5D /* tug.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tug.c; sourceTree = "<group>"; };
+		ADF6A065643307B15C05E58D /* riscv_machine.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = riscv_machine.c; sourceTree = "<group>"; };
+		B5458C37C68D63CCE4D0F26A /* fs_disk.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fs_disk.c; sourceTree = "<group>"; };
+		B64E6059E719D8DC361C31ED /* ip_icmp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ip_icmp.c; sourceTree = "<group>"; };
+		B8AD3BA784A8FEF8C046EB76 /* ip_output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ip_output.c; sourceTree = "<group>"; };
+		BCB507E11D82D11A4347C986 /* misc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = misc.c; sourceTree = "<group>"; };
+		C03357C16A8315EA22C78820 /* softfp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = softfp.c; sourceTree = "<group>"; };
+		C8E89EA84383DA3A3F77EB0F /* sbuf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sbuf.c; sourceTree = "<group>"; };
+		CDDD04597C4191DB90274992 /* riscv_cpu_xlen64.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = riscv_cpu_xlen64.c; sourceTree = "<group>"; };
+		CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_timer.c; sourceTree = "<group>"; };
+		D5B3756C2C3C2F7CDC67E6FB /* socket.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = socket.c; sourceTree = "<group>"; };
+		E0F5EF75D5AE3549F393034F /* simplefb.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = simplefb.c; sourceTree = "<group>"; };
+		E339D89A8390F1A7FD9DBDAF /* initrd.cgz */ = {isa = PBXFileReference; path = initrd.cgz; sourceTree = "<group>"; };
+		E91D39475AB672B65BEC731C /* kernel.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = kernel.bin; sourceTree = "<group>"; };
 		EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Platform-macOS.swift"; sourceTree = "<group>"; };
+		EE3558BA57EC7DC3C1F1A4B5 /* riscv_cpu_xlen32.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = riscv_cpu_xlen32.c; sourceTree = "<group>"; };
+		FA6D5BF8E2E658F6813229EF /* if.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = if.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		10BBDFDBF44C40A186955419 /* payload */ = {
+			isa = PBXGroup;
+			children = (
+				9B1E0F0233DC95696269490F /* bios.bin */,
+				E339D89A8390F1A7FD9DBDAF /* initrd.cgz */,
+				E91D39475AB672B65BEC731C /* kernel.bin */,
+			);
+			path = payload;
+			sourceTree = "<group>";
+		};
+		191A506E249754905F8D085B /* tug */ = {
+			isa = PBXGroup;
+			children = (
+				97F5D907F8BB38A963D956C4 /* src */,
+				342887B4B11A28EBD2D233D4 /* vendors */,
+			);
+			name = tug;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		342887B4B11A28EBD2D233D4 /* vendors */ = {
+			isa = PBXGroup;
+			children = (
+				A055007CA8FF2DA4C239B8D0 /* tinyemu */,
+			);
+			path = vendors;
+			sourceTree = "<group>";
+		};
 		58FD6468588C9AB286B51F28 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -37,8 +131,62 @@
 				457C7DBAF6151797012150AA /* Boat.swift */,
 				8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */,
 				EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */,
+				10BBDFDBF44C40A186955419 /* payload */,
+				191A506E249754905F8D085B /* tug */,
 				58FD6468588C9AB286B51F28 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		74379976CC88E65E41FA9F2D /* slirp */ = {
+			isa = PBXGroup;
+			children = (
+				49E8154B5452F8FE73CD7547 /* bootp.c */,
+				2F055EBC07DAAE5A06316A03 /* cksum.c */,
+				FA6D5BF8E2E658F6813229EF /* if.c */,
+				B64E6059E719D8DC361C31ED /* ip_icmp.c */,
+				8A4B6412615D8F4FEE2AFE71 /* ip_input.c */,
+				B8AD3BA784A8FEF8C046EB76 /* ip_output.c */,
+				9A9FC3EB113FD7E671487DA9 /* mbuf.c */,
+				BCB507E11D82D11A4347C986 /* misc.c */,
+				C8E89EA84383DA3A3F77EB0F /* sbuf.c */,
+				89C951203F20E27FC407304D /* slirp.c */,
+				D5B3756C2C3C2F7CDC67E6FB /* socket.c */,
+				67D44662AA47880F7459743B /* tcp_input.c */,
+				4CB65DECA09580727F861A59 /* tcp_output.c */,
+				96582C97AB84D477D612BA91 /* tcp_subr.c */,
+				CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */,
+				4082A9C2CE4BCCC6010646C1 /* udp.c */,
+			);
+			path = slirp;
+			sourceTree = "<group>";
+		};
+		97F5D907F8BB38A963D956C4 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				EE3558BA57EC7DC3C1F1A4B5 /* riscv_cpu_xlen32.c */,
+				CDDD04597C4191DB90274992 /* riscv_cpu_xlen64.c */,
+				ACA49E7D99059EEE6D5E2E5D /* tug.c */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+		A055007CA8FF2DA4C239B8D0 /* tinyemu */ = {
+			isa = PBXGroup;
+			children = (
+				3383587608FB7AB4C0192E94 /* cutils.c */,
+				B5458C37C68D63CCE4D0F26A /* fs_disk.c */,
+				5C397FCDC262AAC9EF73A50F /* fs.c */,
+				9A4239C56F6ADEC623DEFFCB /* iomem.c */,
+				1C0BDCA7ACFAB72B09C71A9B /* json.c */,
+				A98CA21D793C31A64BD22D7F /* machine.c */,
+				862428A58CD6DC6C8FF43EF7 /* pci.c */,
+				ADF6A065643307B15C05E58D /* riscv_machine.c */,
+				E0F5EF75D5AE3549F393034F /* simplefb.c */,
+				C03357C16A8315EA22C78820 /* softfp.c */,
+				228A716A6790D53BA5ED4CD9 /* virtio.c */,
+				74379976CC88E65E41FA9F2D /* slirp */,
+			);
+			path = tinyemu;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -102,6 +250,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */,
+				2D5BEE5EF8B3F48364880153 /* bios.bin in Resources */,
+				D8E62F72357C886AAFB293AA /* initrd.cgz in Resources */,
+				0B36EC40A8D8348BAB86C6E8 /* kernel.bin in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -115,6 +266,36 @@
 				28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */,
 				16805CCC5001E80C76593E4E /* Platform-iOS.swift in Sources */,
 				441A285F18B5ACDAE1B45936 /* Platform-macOS.swift in Sources */,
+				629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */,
+				FA0ACFD46219A913A05FA34C /* cksum.c in Sources */,
+				BBFBDC52FF47034902A09DA2 /* cutils.c in Sources */,
+				7D4699C93C733DD7F6BC15E5 /* fs.c in Sources */,
+				D3C901BD8CD7F2C975BEF944 /* fs_disk.c in Sources */,
+				FB202D2455FB901CB197FDBF /* if.c in Sources */,
+				5350FF3BC934304F2A43B2CC /* iomem.c in Sources */,
+				E8D3C0F8BE86B8CCBACA6015 /* ip_icmp.c in Sources */,
+				AF77F2D779029ADA49058407 /* ip_input.c in Sources */,
+				44B6ADDCEE63156B890BAB4C /* ip_output.c in Sources */,
+				70747F186000D73B4D8C5F11 /* json.c in Sources */,
+				FDF1F080434FF0A6C0C9361B /* machine.c in Sources */,
+				78ED91C0BB29DF3DD3926C3A /* mbuf.c in Sources */,
+				936789465766365FB125FF83 /* misc.c in Sources */,
+				F76B6FC610AE5B99079C3939 /* pci.c in Sources */,
+				E2CBC7F1CAA76B817333442F /* riscv_cpu_xlen32.c in Sources */,
+				7B94173FEDB6CA985C249FC7 /* riscv_cpu_xlen64.c in Sources */,
+				E6BB882A502B3BC2C0401E15 /* riscv_machine.c in Sources */,
+				3EFC1867BE6BBE2D384840E5 /* sbuf.c in Sources */,
+				4249E589227E4E7AF0404B8A /* simplefb.c in Sources */,
+				09E3ED20579739B43A02BD33 /* slirp.c in Sources */,
+				3F22AFB28D86EDF6A2D744B0 /* socket.c in Sources */,
+				8D9EA91CD6361D1A3BBB437F /* softfp.c in Sources */,
+				20A5CF7D3CAB177A5FF34E3B /* tcp_input.c in Sources */,
+				71675414BA1576C67B0E994E /* tcp_output.c in Sources */,
+				A0175361E91D40697A485B73 /* tcp_subr.c in Sources */,
+				BA27103E4E623A6F86C5A312 /* tcp_timer.c in Sources */,
+				C807D416828E43AE1B968E2A /* tug.c in Sources */,
+				51BD8AA7A24D90E008873C24 /* udp.c in Sources */,
+				B880754ED760FD28743E3F32 /* virtio.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -258,7 +439,22 @@
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					CONFIG_SLIRP,
+					"CONFIG_RISCV_MAX_XLEN=64",
+					"_FILE_OFFSET_BITS=64",
+					_LARGEFILE_SOURCE,
+					_GNU_SOURCE,
+				);
+				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../vendors/tinyemu",
+					"$(SRCROOT)/../vendors/tinyemu/slirp",
+					"$(SRCROOT)/../src",
+					"$(SRCROOT)/../compat",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = Boat;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "tug — MIT";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -270,6 +466,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_CFLAGS = (
+					"-include",
+					"$(SRCROOT)/../compat/darwin_compat.h",
+					"-w",
+					"-fno-modules",
+					"-UDEBUG",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.leok7v.boat;
 				PRODUCT_NAME = Boat;
 				SDKROOT = auto;
@@ -277,6 +480,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Boat-Bridging.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -291,7 +495,22 @@
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					CONFIG_SLIRP,
+					"CONFIG_RISCV_MAX_XLEN=64",
+					"_FILE_OFFSET_BITS=64",
+					_LARGEFILE_SOURCE,
+					_GNU_SOURCE,
+				);
+				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../vendors/tinyemu",
+					"$(SRCROOT)/../vendors/tinyemu/slirp",
+					"$(SRCROOT)/../src",
+					"$(SRCROOT)/../compat",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = Boat;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "tug — MIT";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -303,6 +522,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_CFLAGS = (
+					"-include",
+					"$(SRCROOT)/../compat/darwin_compat.h",
+					"-w",
+					"-fno-modules",
+					"-UDEBUG",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.leok7v.boat;
 				PRODUCT_NAME = Boat;
 				SDKROOT = auto;
@@ -310,6 +536,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Boat-Bridging.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

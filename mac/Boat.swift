@@ -5,8 +5,10 @@
 // `RootView` — iOS/iPadOS stacks Terminal over a 102-key soft keyboard; macOS is
 // just the Terminal. Both also take a hardware (wired/Bluetooth) keyboard.
 //
-// The shell is a small local demo today; the seam to drive the real tug RISC-V
-// engine is `Console.run(_:)` — that's where the emulator plugs in.
+// `Console` drives the real tug RISC-V engine (src/tug.h) via `TugEngine`: the
+// guest boots on a background thread, its console bytes stream into `text`, and
+// keystrokes are forwarded as terminal bytes. Output is shown raw for now —
+// VT100/ANSI interpretation is a later pass.
 
 import SwiftUI
 
@@ -33,80 +35,145 @@ enum KeyInput: Sendable {
     case up, down, left, right
 }
 
-// MARK: - Console (terminal state + demo shell)
+// MARK: - Console (terminal buffer driven by the real tug engine)
 
 @MainActor @Observable
 final class Console {
-    private(set) var text = ""        // entire visible buffer (output + local echo)
-    private var lineBuffer = ""       // the command line being typed
-    private let prompt = "boat:~$ "
-    private let maxChars = 200_000
+    private(set) var text = ""        // entire visible buffer (raw guest output)
+    private let maxChars = 400_000
+    private var engine: TugEngine?
 
-    init() { emit(Self.banner); emit(prompt) }
+    init() { text = "[tug] booting…\r\n" }
 
-    private func emit(_ s: String) {
-        text += s
+    /// Boot the RISC-V guest. Idempotent; called once from the view's onAppear.
+    func start() {
+        guard engine == nil else { return }
+        let e = TugEngine(
+            onOutput: { [weak self] bytes in
+                Task { @MainActor in self?.append(bytes) }
+            },
+            onExit: { [weak self] status in
+                Task { @MainActor in
+                    self?.append(Array("\r\n[tug] guest powered off (status \(status))\r\n".utf8))
+                }
+            })
+        engine = e
+        e.start()
+    }
+
+    /// Append raw guest bytes. Raw-bytes-first: decoded as UTF-8 and shown as-is
+    /// (VT100/ANSI escapes are not yet interpreted — that's a later pass).
+    private func append(_ bytes: [UInt8]) {
+        text += String(decoding: bytes, as: UTF8.self)
         if text.count > maxChars { text.removeFirst(text.count - maxChars) }
     }
 
-    /// Feed a key from either keyboard.
-    func send(_ key: KeyInput) {
+    /// Feed a key from either keyboard to the guest as terminal bytes.
+    func send(_ key: KeyInput) { engine?.input(Self.bytes(for: key)) }
+
+    /// Map a resolved key event to the bytes a terminal would send.
+    static func bytes(for key: KeyInput) -> [UInt8] {
         switch key {
-        case .text(let s):
-            let printable = String(s.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7f })
-            guard !printable.isEmpty else { return }
-            lineBuffer += printable
-            emit(printable)
-        case .enter:
-            emit("\n")
-            run(lineBuffer.trimmingCharacters(in: .whitespaces))
-            lineBuffer = ""
-            emit(prompt)
-        case .backspace:
-            if !lineBuffer.isEmpty { lineBuffer.removeLast(); if !text.isEmpty { text.removeLast() } }
+        case .text(let s):  return Array(s.utf8)
+        case .enter:        return [0x0d]               // CR
+        case .backspace:    return [0x7f]               // DEL (readline/erase)
+        case .tab:          return [0x09]
+        case .esc:          return [0x1b]
+        case .up:           return [0x1b, 0x5b, 0x41]   // ESC [ A
+        case .down:         return [0x1b, 0x5b, 0x42]   // ESC [ B
+        case .right:        return [0x1b, 0x5b, 0x43]   // ESC [ C
+        case .left:         return [0x1b, 0x5b, 0x44]   // ESC [ D
         case .ctrl(let c):
-            switch Character(c.lowercased()) {
-            case "c": emit("^C\n"); lineBuffer = ""; emit(prompt)
-            case "u": while !lineBuffer.isEmpty { lineBuffer.removeLast(); if !text.isEmpty { text.removeLast() } }
-            case "l": text = ""; emit(prompt + lineBuffer)
-            default: break          // other Ctrl combos: reserved for the tug bridge
-            }
-        case .tab, .esc, .up, .down, .left, .right:
-            break                   // reserved for the tug bridge
+            // Ctrl-<key> = the key's ASCII & 0x1f (Ctrl-A=1 … Ctrl-C=3 … Ctrl-Z=26)
+            guard let a = c.uppercased().unicodeScalars.first?.value, a >= 0x40, a <= 0x5f
+            else { return [] }
+            return [UInt8(a & 0x1f)]
         }
     }
+}
 
-    // The seam where the tug RISC-V engine will take over from this demo shell.
-    private func run(_ command: String) {
-        let parts = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true).map(String.init)
-        let cmd = parts.first ?? ""
-        let arg = parts.count > 1 ? parts[1] : ""
-        switch cmd {
-        case "":        break
-        case "help":    emit("commands: help  echo <s>  date  clear  uname  about  ls  whoami\n")
-        case "echo":    emit(arg + "\n")
-        case "date":    emit(Date().formatted(date: .abbreviated, time: .standard) + "\n")
-        case "clear":   text = ""
-        case "uname":   emit("Boat 0.1 (riscv64 sandbox shell) — tug engine pending\n")
-        case "whoami":  emit("skipper\n")
-        case "ls":      emit("bin   etc   home   tmp   usr\n")
-        case "about":
-            emit("Boat — the terminal for tug.\n")
-            emit("A whole Linux in one unprivileged binary will run right here.\n")
-            emit("Today this is a local demo shell; the tug RISC-V engine plugs into run().\n")
-        default:        emit("boat: command not found: \(cmd)   (try 'help')\n")
-        }
+// MARK: - TugEngine (C interop: drives src/tug.h on a background thread)
+
+/// Owns the C `tug` engine: loads the bundled payload, starts the VM on a
+/// dedicated thread, streams console bytes out via `onOutput`, and forwards
+/// keyboard bytes in via `input`. Not actor-isolated — the C side is driven from
+/// its own thread; callbacks marshal to the main actor inside the closures.
+final class TugEngine: @unchecked Sendable {
+    private var handle: OpaquePointer?                 // tug *
+    private var blobs: [UnsafeMutableBufferPointer<UInt8>] = []   // payload, kept alive
+    private var thread: Thread?
+    private let onOutput: @Sendable ([UInt8]) -> Void
+    private let onExit: @Sendable (Int32) -> Void
+
+    init(onOutput: @escaping @Sendable ([UInt8]) -> Void,
+         onExit:   @escaping @Sendable (Int32) -> Void) {
+        self.onOutput = onOutput
+        self.onExit = onExit
     }
 
-    static let banner = """
-      ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
-         _____
-        /     \\__   .  o            BOAT
-       |  tug  |_ \\____            a terminal for the tug sandbox
-       \\______(_)___)             type 'help' or 'about'
-      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    func start() {
+        guard let bios   = loadResource("bios",   "bin"),
+              let kernel = loadResource("kernel", "bin"),
+              let initrd = loadResource("initrd", "cgz") else {
+            onOutput(Array("[tug] error: bundled payload missing\r\n".utf8)); return
+        }
 
-    """
+        var settings = tug_settings()
+        settings.ram_mb = 256
+        settings.bios   = UnsafePointer(bios.baseAddress);   settings.bios_len   = Int32(bios.count)
+        settings.kernel = UnsafePointer(kernel.baseAddress); settings.kernel_len = Int32(kernel.count)
+        settings.initrd = UnsafePointer(initrd.baseAddress); settings.initrd_len = Int32(initrd.count)
+
+        var host = tug_host()
+        host.ctx = Unmanaged.passRetained(self).toOpaque()
+        host.console_out = { ctx, data, len in
+            guard let ctx, let data, len > 0 else { return }
+            let me = Unmanaged<TugEngine>.fromOpaque(ctx).takeUnretainedValue()
+            me.onOutput(Array(UnsafeBufferPointer(start: data, count: Int(len))))
+        }
+        host.exited = { ctx, status in
+            guard let ctx else { return }
+            let me = Unmanaged<TugEngine>.fromOpaque(ctx).takeUnretainedValue()
+            me.onExit(status)
+        }
+
+        handle = withUnsafePointer(to: &settings) { sp in
+            withUnsafePointer(to: &host) { hp in tug_new(sp, hp) }
+        }
+        guard handle != nil else { onOutput(Array("[tug] error: tug_new failed\r\n".utf8)); return }
+
+        let t = Thread { [weak self] in
+            guard let self, let h = self.handle else { return }
+            _ = tug_run(h)        // blocks until guest power-off / stop
+        }
+        t.name = "tug-run"
+        t.stackSize = 8 << 20
+        thread = t
+        t.start()
+    }
+
+    func input(_ bytes: [UInt8]) {
+        guard let h = handle, !bytes.isEmpty else { return }
+        bytes.withUnsafeBufferPointer { tug_input(h, $0.baseAddress, Int32($0.count)) }
+    }
+
+    func resize(cols: Int, rows: Int) {
+        guard let h = handle else { return }
+        tug_resize(h, Int32(cols), Int32(rows))
+    }
+
+    func stop() { if let h = handle { tug_stop(h) } }
+
+    /// Load a bundled resource into a malloc'd buffer that outlives the engine
+    /// (tug only reads these blobs; they must stay valid for the VM's lifetime).
+    private func loadResource(_ name: String, _ ext: String) -> UnsafeMutableBufferPointer<UInt8>? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext),
+              let data = try? Data(contentsOf: url) else { return nil }
+        let buf = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: data.count)
+        _ = data.copyBytes(to: buf)
+        blobs.append(buf)
+        return buf
+    }
 }
 
 // MARK: - Terminal view (renders the console, takes hardware-keyboard input)
@@ -139,7 +206,7 @@ struct TerminalView: View {
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
-        .onAppear { focused = true }
+        .onAppear { focused = true; console.start() }
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
         // .down AND .repeat: macOS coalesces rapid/held presses into key-repeat

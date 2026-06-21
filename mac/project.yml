@@ -36,11 +36,70 @@ targets:
       - Platform-iOS.swift
       - Platform-macOS.swift
       - Assets.xcassets
+      # tug engine (embeddable library) + the TinyEMU core it drives. Same object
+      # set the Makefile links for `tug`, minus temu.o (its own main) — Boat
+      # provides main via SwiftUI. riscv_cpu.c is compiled at both XLENs through
+      # the two wrappers (see src/riscv_cpu_xlen*.c). These live under vendors/
+      # (gitignored) — run `make build embed` before generating/opening.
+      - ../src/tug.c
+      - ../src/riscv_cpu_xlen32.c
+      - ../src/riscv_cpu_xlen64.c
+      - ../vendors/tinyemu/virtio.c
+      - ../vendors/tinyemu/pci.c
+      - ../vendors/tinyemu/fs.c
+      - ../vendors/tinyemu/cutils.c
+      - ../vendors/tinyemu/iomem.c
+      - ../vendors/tinyemu/simplefb.c
+      - ../vendors/tinyemu/json.c
+      - ../vendors/tinyemu/machine.c
+      - ../vendors/tinyemu/fs_disk.c
+      - ../vendors/tinyemu/riscv_machine.c
+      - ../vendors/tinyemu/softfp.c
+      - path: ../vendors/tinyemu/slirp
+        includes: ["*.c"]
+      # guest payload baked in as app resources (staged by mac/stage-payload.sh)
+      - path: payload/bios.bin
+        buildPhase: resources
+      - path: payload/kernel.bin
+        buildPhase: resources
+      - path: payload/initrd.cgz
+        buildPhase: resources
     settings:
       base:
         PRODUCT_NAME: Boat
         PRODUCT_BUNDLE_IDENTIFIER: dev.leok7v.boat
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # --- tug engine / TinyEMU C build ---
+        SWIFT_OBJC_BRIDGING_HEADER: Boat-Bridging.h
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/../vendors/tinyemu"
+          - "$(SRCROOT)/../vendors/tinyemu/slirp"
+          - "$(SRCROOT)/../src"
+          - "$(SRCROOT)/../compat"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "CONFIG_SLIRP"
+          - "CONFIG_RISCV_MAX_XLEN=64"
+          - "_FILE_OFFSET_BITS=64"
+          - "_LARGEFILE_SOURCE"
+          - "_GNU_SOURCE"
+        # forced-include the Darwin compat shim; -w silences the vendored core's
+        # warnings (it builds clean under the Makefile's plain cc). -fno-modules:
+        # the Makefile's plain-cc build has no clang modules, so slirp's local
+        # struct sbuf/tcpcb/udphdr/ipovly never meet the system <netinet/*>
+        # versions. Xcode enables modules by default, which auto-imports those
+        # system headers and flags the redefinitions — turn modules off for the
+        # C TUs only (Swift's own module handling is unaffected).
+        OTHER_CFLAGS:
+          - "-include"
+          - "$(SRCROOT)/../compat/darwin_compat.h"
+          - "-w"
+          - "-fno-modules"
+          # Xcode's Debug config defines DEBUG=1, which enables slirp's DPRINTF
+          # debug code (latent type bug, never built under the Makefile's plain
+          # cc). Undefine it for the C TUs; Swift keeps DEBUG for #if DEBUG.
+          - "-UDEBUG"
+        GCC_TREAT_WARNINGS_AS_ERRORS: "NO"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Boat
         TARGETED_DEVICE_FAMILY: "1,2"
