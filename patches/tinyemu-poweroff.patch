@@ -1,0 +1,26 @@
+--- a/riscv_machine.c	2026-06-20 19:46:09
++++ b/riscv_machine.c	2026-06-20 19:46:18
+@@ -125,6 +125,12 @@
+     }
+     return val;
+ }
++
++/* tug: optional power-off hook. When set (by the tug library) the guest's
++ * shuthost request calls it instead of exit(0), so the embedder's run loop
++ * can return cleanly and the host process keeps running. NULL for stock temu
++ * and the tug CLI, which keep the original "Power off." + exit(0). */
++void (*tug_poweroff_hook)(void) = 0;
+ 
+ static void htif_handle_cmd(RISCVMachine *s)
+ {
+@@ -134,6 +140,10 @@
+     cmd = (s->htif_tohost >> 48) & 0xff;
+     if (s->htif_tohost == 1) {
+         /* shuthost */
++        if (tug_poweroff_hook) {
++            tug_poweroff_hook();
++            return;
++        }
+         printf("\nPower off.\n");
+         exit(0);
+     } else if (device == 1 && cmd == 1) {

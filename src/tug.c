@@ -1,24 +1,22 @@
 /*
- * tug — a minimal standalone orchestrator around the TinyEMU RISC-V core.
+ * tug.c — the tug RISC-V Linux sandbox as an embeddable C library (tug.h).
  *
- * Unlike Bellard's `temu`, this drives the emulator *programmatically* (no JSON
- * config file): it loads a bios (bbl), kernel (Image) and optional initrd into
- * memory, wires the guest console to host stdin/stdout, and runs. This is the
- * embeddable "kernel in a box" core for the iOS/Android story.
+ * This drives Bellard's TinyEMU core *programmatically* (no JSON config file):
+ * it loads a bios (bbl), kernel (Image) and optional initrd from in-memory
+ * blobs, wires the guest console to host callbacks, and runs. Two front-ends
+ * link it: the tug/tug-embedded/tug-embedded-apk CLIs (src/tug_main.c) and the
+ * Boat app (macOS + iOS).
  *
- * The console glue and run loop are adapted from TinyEMU's temu.c (MIT).
+ * Unlike the old monolithic orchestrator, this never touches a terminal and
+ * never exits the process: console bytes stream out through host->console_out,
+ * input is fed in via tug_input(), and guest power-off returns from tug_run()
+ * (via the patches/tinyemu-poweroff.patch hook) instead of calling exit().
  *
- * Usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hp:gp] [-S dir] [-b] <bbl.bin> <Image> [initrd.cpio.gz]
- *   -m MB        guest RAM in MiB (default 256)
- *   -a cmdline   kernel command line (default "console=hvc0")
- *   -d disk.img  attach a raw image as virtio-block /dev/vda (persistent disk).
- *                For tug-embedded, defaults to "tug-data.img" next to the binary
- *                (or $TUG_DISK) when present; -d overrides; -d "" disables.
- *   -L hp:gp     forward host 127.0.0.1:hp -> guest:gp (TCP; repeatable). e.g.
- *                -L 2222:22 then `ssh -p 2222 root@127.0.0.1` (run `tug-sshd` in guest).
- *   -S dir       share host directory `dir` into the guest via 9p (tag "tugshare";
- *                guest auto-mounts it at /mnt/share) for live file exchange.
- *   -b           benchmark: report boot wall-time + peak RSS on exit (to stderr)
+ * Single VM per process for now: the power-off hook is one global, so it routes
+ * to the one live tug instance.
+ *
+ * The console glue / run loop / virtio-block backend are adapted from TinyEMU's
+ * temu.c (MIT).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,18 +27,10 @@
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
-#include <termios.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
-#include <sys/resource.h>
-#include <signal.h>
+#include <pthread.h>
 #include <netinet/in.h>
-#if defined(__APPLE__)
-/* declared rather than #include <mach-o/dyld.h>: that header defines its own
- * enum FALSE/TRUE which collides with TinyEMU's cutils.h BOOL enum. */
-int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
-#endif
 
+#include "tug.h"
 #include "cutils.h"
 #include "iomem.h"
 #include "virtio.h"  /* also pulls in fs.h: fs_disk_init for the -S 9p share */
@@ -49,46 +39,51 @@ int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
 #include "slirp/libslirp.h"
 #endif
 
-#ifdef TUG_EMBEDDED
-/* payload baked into the binary by generated/payload.s (.incbin) */
-extern const unsigned char tug_bbl_start[],    tug_bbl_end[];
-extern const unsigned char tug_kernel_start[], tug_kernel_end[];
-extern const unsigned char tug_initrd_start[], tug_initrd_end[];
-#endif
-
-/* -L host_port:guest_port TCP forwards (applied to slirp in slirp_open). */
-#define TUG_MAX_FWD 8
-static struct { int hport, gport; } tug_fwds[TUG_MAX_FWD];
-static int tug_nfwd;
-
-/* ----------------------------------------------------------- block device */
-/* A read/write file-backed virtio-block device. temu.c has an equivalent, but
- * it is `static` there and temu.o is excluded from this link, so tug carries
- * its own minimal implementation. This backs the persistent /dev/vda data disk
- * that holds the Alpine apk userland.
- *
- * IO goes through raw pread/pwrite on the fd (NOT buffered stdio): random-access
- * block IO defeats a stdio buffer (every seek to a new offset flushes it), and
- * an fflush-per-write made seeding the rootfs / `apk` painfully slow. pwrite
- * lands in the host page cache — fast, and durable across a normal tug exit
- * (the kernel writes it back). TinyEMU's virtio-blk ignores guest FLUSH
- * requests and BlockDevice has no flush hook, so for crash durability we fsync
- * once at exit (see tug_block_sync_atexit). */
+/* Set by patches/tinyemu-poweroff.patch in riscv_machine.c. When non-NULL the
+ * guest's shuthost request calls it instead of exit(0). */
+extern void (*tug_poweroff_hook)(void);
 
 #define TUG_SECTOR_SIZE 512
+#define TUG_IN_RING     8192     /* host->guest input ring (bytes) */
+#define MAX_EXEC_CYCLE  500000
+#define MAX_SLEEP_TIME  10       /* ms: caps run-loop latency for tug_input/stop */
 
 typedef struct {
     int fd;
     int64_t nb_sectors;
 } TugBlockFile;
 
-static int tug_block_fd = -1;   /* single data disk; fsync'd at exit */
+struct tug {
+    VirtMachine  *vm;
+    tug_host      host;
+    tug_settings  cfg;             /* shallow copy; blob/string pointers must outlive us */
 
-static void tug_block_sync_atexit(void)
-{
-    if (tug_block_fd >= 0)
-        fsync(tug_block_fd);
-}
+    /* host -> guest input ring (tug_input writes, run loop drains) */
+    pthread_mutex_t in_mtx;
+    uint8_t         in[TUG_IN_RING];
+    int             in_head, in_tail;
+
+    /* terminal size (tug_resize) */
+    int   cols, rows;
+    volatile int resize_pending;
+
+    /* control / lifecycle */
+    volatile int stop_flag;        /* tug_stop -> tug_run returns asap */
+    volatile int powered_off;      /* guest shuthost -> tug_run returns */
+    int          exit_status;
+
+    int blk_fd;                    /* data-disk fd, fsync'd + closed in tug_free */
+};
+
+/* single live instance, for the global power-off hook */
+static tug *g_current;
+
+/* ----------------------------------------------------------- block device */
+/* A read/write file-backed virtio-block device backing the persistent /dev/vda
+ * data disk (Alpine apk userland). Raw pread/pwrite (NOT buffered stdio): random
+ * block IO defeats a stdio buffer, and an fflush-per-write made seeding / apk
+ * painfully slow. pwrite lands in the host page cache and is durable across a
+ * normal exit; for crash durability we fsync once in tug_free. */
 
 static int64_t tug_bf_get_sector_count(BlockDevice *bs)
 {
@@ -122,14 +117,12 @@ static int tug_bf_write_async(BlockDevice *bs, uint64_t sector_num,
     off_t off = (off_t)sector_num * TUG_SECTOR_SIZE;
     if (bf->fd < 0 || n <= 0)
         return n <= 0 ? 0 : -1;
-    /* virtio block requests here are small and bounded, so a full-length pwrite
-     * is expected; a short write means ENOSPC/IO error -> report failure. */
     if (pwrite(bf->fd, buf, len, off) != (ssize_t)len)
-        return -1;             /* no per-write flush: page cache + fsync at exit */
+        return -1;             /* no per-write flush: page cache + fsync at free */
     return 0; /* synchronous */
 }
 
-static BlockDevice *tug_block_device_init(const char *filename)
+static BlockDevice *tug_block_device_init(tug *t, const char *filename)
 {
     BlockDevice *bs;
     TugBlockFile *bf;
@@ -144,8 +137,7 @@ static BlockDevice *tug_block_device_init(const char *filename)
     }
     /* Exclusive advisory lock: two tug instances writing the same ext4 image
      * through independent guest filesystems would corrupt it (ext4 is not
-     * cluster-aware). flock is released automatically when the fd closes / the
-     * process exits. */
+     * cluster-aware). Released automatically when the fd closes / process exits. */
     if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
         fprintf(stderr, "tug: data disk %s is already in use by another tug "
                 "instance (refusing to open it twice).\n", filename);
@@ -163,178 +155,33 @@ static BlockDevice *tug_block_device_init(const char *filename)
     bs->read_async = tug_bf_read_async;
     bs->write_async = tug_bf_write_async;
 
-    tug_block_fd = fd;
-    atexit(tug_block_sync_atexit);
+    t->blk_fd = fd;
     return bs;
 }
 
 /* ------------------------------------------------------------------ console */
 
-typedef struct {
-    int stdin_fd;
-    int console_esc_state;
-    BOOL resize_pending;
-    /* Ctrl-C escape: forward every ^C to the guest, but if the guest looks wedged
-     * (N consecutive ^C, nothing else typed, within a short window) offer to
-     * force-quit tug itself. A healthy guest gives a prompt back and the next
-     * keystroke resets the count, so normal interrupts never kill tug. */
-    int  ctrlc_count;
-    BOOL ctrlc_armed;
-    uint64_t ctrlc_last_ms;
-} STDIODevice;
-
-/* force-quit tug after this many consecutive ^C (the last one is the confirm) */
-#define CTRLC_ARM_COUNT   3
-#define CTRLC_WINDOW_MS   2000
-
-static uint64_t now_ms(void)
+static void tug_console_write(void *opaque, const uint8_t *buf, int len)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+    tug *t = opaque;
+    if (t->host.console_out)
+        t->host.console_out(t->host.ctx, buf, len);
 }
 
-static struct termios oldtty;
-static int old_fd0_flags;
-static STDIODevice *global_stdio_device;
-static BOOL tty_inited;
-
-static void term_exit(void)
+/* drain queued input into the guest console (called from the run loop) */
+static int tug_console_read(void *opaque, uint8_t *buf, int len)
 {
-    if (tty_inited) {
-        tcsetattr(0, TCSANOW, &oldtty);
-        fcntl(0, F_SETFL, old_fd0_flags);
-    }
-}
-
-static void term_init(BOOL allow_ctrlc)
-{
-    struct termios tty;
-    /* only switch the terminal to raw mode if stdin is actually a tty */
-    if (!isatty(0))
-        return;
-    memset(&tty, 0, sizeof(tty));
-    tcgetattr(0, &tty);
-    oldtty = tty;
-    old_fd0_flags = fcntl(0, F_GETFL);
-
-    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL|IXON);
-    tty.c_oflag |= OPOST;
-    tty.c_lflag &= ~(ECHO|ECHONL|ICANON|IEXTEN);
-    if (!allow_ctrlc)
-        tty.c_lflag &= ~ISIG;
-    tty.c_cflag &= ~(CSIZE|PARENB);
-    tty.c_cflag |= CS8;
-    tty.c_cc[VMIN] = 1;
-    tty.c_cc[VTIME] = 0;
-    tcsetattr(0, TCSANOW, &tty);
-    tty_inited = TRUE;
-    atexit(term_exit);
-}
-
-static void console_write(void *opaque, const uint8_t *buf, int len)
-{
-    fwrite(buf, 1, len, stdout);
-    fflush(stdout);
-}
-
-static int console_read(void *opaque, uint8_t *buf, int len)
-{
-    STDIODevice *s = opaque;
-    int ret, i, j;
-    uint8_t ch;
-
+    tug *t = opaque;
+    int n = 0;
     if (len <= 0)
         return 0;
-    ret = read(s->stdin_fd, buf, len);
-    if (ret < 0)
-        return 0;
-    if (ret == 0)
-        return 0; /* EOF: keep running (self-running init powers off the VM) */
-
-    j = 0;
-    for (i = 0; i < ret; i++) {
-        ch = buf[i];
-        if (s->console_esc_state) {
-            s->console_esc_state = 0;
-            switch (ch) {
-            case 'x': printf("Terminated\r\n"); exit(0);
-            case 1: goto output_char;
-            default: break;
-            }
-        } else if (ch == 1) {
-            s->console_esc_state = 1;
-        } else if (ch == 3) {
-            /* Ctrl-C: always forward to the guest so bash gets SIGINT. Track
-             * consecutive presses to offer a force-quit if the guest is wedged. */
-            uint64_t t = now_ms();
-            if (t - s->ctrlc_last_ms > CTRLC_WINDOW_MS) {
-                s->ctrlc_count = 0;
-                s->ctrlc_armed = FALSE;
-            }
-            s->ctrlc_last_ms = t;
-            if (s->ctrlc_armed) {
-                fputs("\r\n[tug] terminated\r\n", stderr);
-                exit(0);
-            }
-            buf[j++] = ch;                /* deliver this ^C to the guest */
-            if (++s->ctrlc_count >= CTRLC_ARM_COUNT) {
-                fputs("\r\n[tug] guest not responding to Ctrl-C? "
-                      "press Ctrl-C again to quit tug (or Ctrl-A x).\r\n", stderr);
-                fflush(stderr);
-                s->ctrlc_armed = TRUE;
-            }
-        } else {
-        output_char:
-            s->ctrlc_count = 0;           /* any other key means progress */
-            s->ctrlc_armed = FALSE;
-            buf[j++] = ch;
-        }
+    pthread_mutex_lock(&t->in_mtx);
+    while (n < len && t->in_head != t->in_tail) {
+        buf[n++] = t->in[t->in_head];
+        t->in_head = (t->in_head + 1) % TUG_IN_RING;
     }
-    return j;
-}
-
-static void term_resize_handler(int sig)
-{
-    if (global_stdio_device)
-        global_stdio_device->resize_pending = TRUE;
-}
-
-static void console_get_size(STDIODevice *s, int *pw, int *ph)
-{
-    struct winsize ws;
-    int width = 80, height = 25;
-    if (ioctl(s->stdin_fd, TIOCGWINSZ, &ws) == 0 && ws.ws_col >= 4 && ws.ws_row >= 4) {
-        width = ws.ws_col;
-        height = ws.ws_row;
-    }
-    *pw = width;
-    *ph = height;
-}
-
-static CharacterDevice *console_init(BOOL allow_ctrlc)
-{
-    CharacterDevice *dev;
-    STDIODevice *s;
-    struct sigaction sig;
-
-    term_init(allow_ctrlc);
-    dev = mallocz(sizeof(*dev));
-    s = mallocz(sizeof(*s));
-    s->stdin_fd = 0;
-    fcntl(s->stdin_fd, F_SETFL, O_NONBLOCK);
-    s->resize_pending = TRUE;
-    global_stdio_device = s;
-
-    sig.sa_handler = term_resize_handler;
-    sigemptyset(&sig.sa_mask);
-    sig.sa_flags = 0;
-    sigaction(SIGWINCH, &sig, NULL);
-
-    dev->opaque = s;
-    dev->write_data = console_write;
-    dev->read_data = console_read;
-    return dev;
+    pthread_mutex_unlock(&t->in_mtx);
+    return n;
 }
 
 /* --------------------------------------------------------------- slirp NAT */
@@ -367,7 +214,7 @@ static void slirp_select_poll1(EthernetDevice *net,
     slirp_select_poll(net->opaque, rfds, wfds, efds, (select_ret <= 0));
 }
 /* user-mode NAT: guest 10.0.2.15, gateway/host 10.0.2.2, DNS 10.0.2.3 */
-static EthernetDevice *slirp_open(void)
+static EthernetDevice *tug_slirp_open(tug *t)
 {
     EthernetDevice *net = mallocz(sizeof(*net));
     struct in_addr net_addr = { .s_addr = htonl(0x0a000200) };
@@ -383,20 +230,20 @@ static EthernetDevice *slirp_open(void)
     net->select_fill  = slirp_select_fill1;
     net->select_poll  = slirp_select_poll1;
 
-    /* -L host_port:guest_port TCP forwards (e.g. 2222:22 for ssh to dropbear).
-     * Bound to 127.0.0.1 only — these never listen on the network. */
+    /* host_port:guest_port TCP forwards (e.g. 2222:22 for ssh). Bound to
+     * 127.0.0.1 only — these never listen on the network. */
     {
         struct in_addr guest = { .s_addr = htonl(0x0a00020f) }; /* 10.0.2.15 */
         struct in_addr lo    = { .s_addr = htonl(0x7f000001) }; /* 127.0.0.1  */
         int i;
-        for (i = 0; i < tug_nfwd; i++) {
-            if (slirp_add_hostfwd(slirp_state, 0, lo, tug_fwds[i].hport,
-                                  guest, tug_fwds[i].gport) < 0)
+        for (i = 0; i < t->cfg.nforwards; i++) {
+            int hp = t->cfg.forwards[i].host_port;
+            int gp = t->cfg.forwards[i].guest_port;
+            if (slirp_add_hostfwd(slirp_state, 0, lo, hp, guest, gp) < 0)
                 fprintf(stderr, "tug: could not forward 127.0.0.1:%d -> guest:%d "
-                        "(port in use?)\n", tug_fwds[i].hport, tug_fwds[i].gport);
+                        "(port in use?)\n", hp, gp);
             else
-                fprintf(stderr, "tug: forwarding 127.0.0.1:%d -> guest:%d\n",
-                        tug_fwds[i].hport, tug_fwds[i].gport);
+                fprintf(stderr, "tug: forwarding 127.0.0.1:%d -> guest:%d\n", hp, gp);
         }
     }
     return net;
@@ -405,29 +252,29 @@ static EthernetDevice *slirp_open(void)
 
 /* ------------------------------------------------------------------ run loop */
 
-#define MAX_EXEC_CYCLE  500000
-#define MAX_SLEEP_TIME  10 /* ms */
-
-static void tug_run(VirtMachine *m)
+static void tug_step(tug *t)
 {
+    VirtMachine *m = t->vm;
     fd_set rfds, wfds, efds;
-    int fd_max, ret, delay, stdin_fd = -1;
+    int fd_max, ret, delay;
     struct timeval tv;
 
     delay = virt_machine_get_sleep_duration(m, MAX_SLEEP_TIME);
     FD_ZERO(&rfds); FD_ZERO(&wfds); FD_ZERO(&efds);
     fd_max = -1;
+
+    /* feed any queued input + apply a pending resize when the guest can take it */
     if (m->console_dev && virtio_console_can_write_data(m->console_dev)) {
-        STDIODevice *s = m->console->opaque;
-        stdin_fd = s->stdin_fd;
-        FD_SET(stdin_fd, &rfds);
-        fd_max = stdin_fd;
-        if (s->resize_pending) {
-            int w, h;
-            console_get_size(s, &w, &h);
-            virtio_console_resize_event(m->console_dev, w, h);
-            s->resize_pending = FALSE;
+        if (t->resize_pending) {
+            virtio_console_resize_event(m->console_dev, t->cols, t->rows);
+            t->resize_pending = 0;
         }
+        uint8_t buf[128];
+        int len = virtio_console_get_write_len(m->console_dev);
+        len = min_int(len, (int)sizeof(buf));
+        len = tug_console_read(t, buf, len);
+        if (len > 0)
+            virtio_console_write_data(m->console_dev, buf, len);
     }
 #ifdef CONFIG_SLIRP
     if (m->net)
@@ -439,208 +286,172 @@ static void tug_run(VirtMachine *m)
 #ifdef CONFIG_SLIRP
     if (m->net)
         m->net->select_poll(m->net, &rfds, &wfds, &efds, ret);
+#else
+    (void)ret;
 #endif
-    if (ret > 0 && m->console_dev && FD_ISSET(stdin_fd, &rfds)) {
-        uint8_t buf[128];
-        int len = virtio_console_get_write_len(m->console_dev);
-        len = min_int(len, (int)sizeof(buf));
-        len = m->console->read_data(m->console->opaque, buf, len);
-        if (len > 0)
-            virtio_console_write_data(m->console_dev, buf, len);
-    }
     virt_machine_interp(m, MAX_EXEC_CYCLE);
 }
 
-/* ------------------------------------------------------------------ helpers */
+/* ------------------------------------------------------------------ poweroff */
 
-static uint8_t *load_file(const char *filename, int *plen)
+static void tug_on_poweroff(void)
 {
-    FILE *f = fopen(filename, "rb");
-    uint8_t *buf;
-    long size;
-    if (!f) { fprintf(stderr, "tug: cannot open %s: %s\n", filename, strerror(errno)); exit(1); }
-    fseek(f, 0, SEEK_END); size = ftell(f); fseek(f, 0, SEEK_SET);
-    buf = malloc(size);
-    if (fread(buf, 1, size, f) != (size_t)size) { fprintf(stderr, "tug: read error %s\n", filename); exit(1); }
-    fclose(f);
-    *plen = (int)size;
-    return buf;
+    if (g_current) {
+        g_current->powered_off = 1;
+        g_current->exit_status = 0;
+    }
 }
 
-static struct timespec t_start;
+/* ------------------------------------------------------------------ public API */
 
-static void report_stats(void)
-{
-    struct timespec now;
-    struct rusage ru;
-    double secs;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    secs = (now.tv_sec - t_start.tv_sec) + (now.tv_nsec - t_start.tv_nsec) / 1e9;
-    getrusage(RUSAGE_SELF, &ru);
-    /* ru_maxrss is bytes on Darwin, KiB on Linux */
-#if defined(__APPLE__)
-    double rss_mb = ru.ru_maxrss / (1024.0 * 1024.0);
-#else
-    double rss_mb = ru.ru_maxrss / 1024.0;
-#endif
-    fprintf(stderr, "\n[tug] wall=%.3fs  peak_rss=%.1f MiB\n", secs, rss_mb);
-}
-
-/* ------------------------------------------------------------------ main */
-
-int main(int argc, char **argv)
+tug *tug_new(const tug_settings *settings, const tug_host *host)
 {
     VirtMachineParams params, *p = &params;
-    VirtMachine *s;
-    const char *cmdline = "console=hvc0 virtio_net.napi_tx=false";
-    const char *disk_path = NULL;   /* -d: explicit data disk image */
-    BOOL disk_explicit = FALSE;     /* whether -d was given (even as "") */
-    const char *share_dir = NULL;   /* -S: host dir shared into the guest via 9p */
-    uint64_t ram_mb = 256;
-    BOOL benchmark = FALSE;
-    int c, len;
+    tug *t;
 
-    while ((c = getopt(argc, argv, "m:a:d:L:S:b")) != -1) {
-        switch (c) {
-        case 'm': ram_mb = strtoull(optarg, NULL, 0); break;
-        case 'a': cmdline = optarg; break;
-        case 'd': disk_path = optarg; disk_explicit = TRUE; break;
-        case 'S': share_dir = optarg; break;  /* host dir -> guest 9p (tag "tugshare") */
-        case 'L': {  /* host_port:guest_port TCP forward (e.g. 2222:22 for ssh) */
-            int hp = 0, gp = 0;
-            if (sscanf(optarg, "%d:%d", &hp, &gp) == 2 && hp > 0 && gp > 0
-                && tug_nfwd < TUG_MAX_FWD) {
-                tug_fwds[tug_nfwd].hport = hp;
-                tug_fwds[tug_nfwd].gport = gp;
-                tug_nfwd++;
-            } else {
-                fprintf(stderr, "tug: bad -L '%s' (want hostport:guestport)\n", optarg);
-                return 1;
-            }
-            break;
-        }
-        case 'b': benchmark = TRUE; break;
-        default:
-            fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-S dir] [-b] bbl.bin Image [initrd]\n");
-            return 1;
-        }
-    }
-    int nfiles = argc - optind;
+    if (!settings || !host || !settings->bios || !settings->kernel)
+        return NULL;
+
+    t = mallocz(sizeof(*t));
+    t->host = *host;
+    t->cfg  = *settings;
+    pthread_mutex_init(&t->in_mtx, NULL);
+    t->blk_fd = -1;
+    t->cols = 80;
+    t->rows = 25;
+    t->resize_pending = 1;
 
     memset(p, 0, sizeof(*p));
     p->vmc = &riscv_machine_class;
     p->machine_name = strdup("riscv64");
     p->vmc->virt_machine_set_defaults(p);
-    p->ram_size = ram_mb << 20;
+    p->ram_size = (uint64_t)(settings->ram_mb > 0 ? settings->ram_mb : 256) << 20;
     p->rtc_real_time = TRUE;
 
-#ifdef TUG_EMBEDDED
-    if (nfiles == 0) {
-        /* self-contained: payload baked into the binary, no external files */
-        p->files[VM_FILE_BIOS].buf   = (uint8_t *)tug_bbl_start;    p->files[VM_FILE_BIOS].len   = (int)(tug_bbl_end    - tug_bbl_start);
-        p->files[VM_FILE_KERNEL].buf = (uint8_t *)tug_kernel_start; p->files[VM_FILE_KERNEL].len = (int)(tug_kernel_end - tug_kernel_start);
-        p->files[VM_FILE_INITRD].buf = (uint8_t *)tug_initrd_start; p->files[VM_FILE_INITRD].len = (int)(tug_initrd_end - tug_initrd_start);
-    } else
-#endif
-    if (nfiles >= 2) {
-        p->files[VM_FILE_BIOS].buf   = load_file(argv[optind],   &len); p->files[VM_FILE_BIOS].len   = len;
-        p->files[VM_FILE_KERNEL].buf = load_file(argv[optind+1], &len); p->files[VM_FILE_KERNEL].len = len;
-        if (nfiles >= 3) {
-            p->files[VM_FILE_INITRD].buf = load_file(argv[optind+2], &len);
-            p->files[VM_FILE_INITRD].len = len;
-        }
-    } else {
-        fprintf(stderr, "usage: tug [-m MB] [-a cmdline] [-d disk.img] [-L hport:gport] [-S dir] [-b] bbl.bin Image [initrd]\n");
-        return 1;
+    p->files[VM_FILE_BIOS].buf   = (uint8_t *)settings->bios;
+    p->files[VM_FILE_BIOS].len   = settings->bios_len;
+    p->files[VM_FILE_KERNEL].buf = (uint8_t *)settings->kernel;
+    p->files[VM_FILE_KERNEL].len = settings->kernel_len;
+    if (settings->initrd && settings->initrd_len > 0) {
+        p->files[VM_FILE_INITRD].buf = (uint8_t *)settings->initrd;
+        p->files[VM_FILE_INITRD].len = settings->initrd_len;
     }
-    vm_add_cmdline(p, cmdline);
-    /* allow_ctrlc=FALSE: do NOT let the host tty turn ^C into SIGINT for tug.
-     * ^C is forwarded to the guest (bash SIGINT); console_read handles the
-     * force-quit escape (see CTRLC_ARM_COUNT). */
-    p->console = console_init(FALSE);
+    vm_add_cmdline(p, settings->cmdline ? settings->cmdline
+                                        : "console=hvc0 virtio_net.napi_tx=false");
+
+    /* console -> host callbacks (input is queued via tug_input) */
+    {
+        CharacterDevice *dev = mallocz(sizeof(*dev));
+        dev->opaque = t;
+        dev->write_data = tug_console_write;
+        dev->read_data  = tug_console_read;
+        p->console = dev;
+    }
 
 #ifdef CONFIG_SLIRP
-    /* user-mode NAT: guest reaches the Internet via the host, no privileges */
     p->tab_eth[0].driver = strdup("user");
-    p->tab_eth[0].net = slirp_open();
+    p->tab_eth[0].net = tug_slirp_open(t);
     p->eth_count = p->tab_eth[0].net ? 1 : 0;
 #endif
 
-    /* -S hostdir: share a host directory into the guest as a virtio-9p device.
-     * The guest mounts it (tag "tugshare") for live host<->guest file exchange;
-     * the machine creates the virtio-9p device from tab_fs. */
-    if (share_dir) {
-        FSDevice *fs = fs_disk_init(share_dir);
+    /* -S host dir shared into the guest as a virtio-9p device (tag "tugshare") */
+    if (settings->share_dir) {
+        FSDevice *fs = fs_disk_init(settings->share_dir);
         if (!fs) {
-            fprintf(stderr, "tug: -S '%s' must be an existing directory\n", share_dir);
-            return 1;
+            fprintf(stderr, "tug: share dir '%s' must be an existing directory\n",
+                    settings->share_dir);
+            free(t);
+            return NULL;
         }
         p->tab_fs[0].fs_dev = fs;
         p->tab_fs[0].tag = strdup("tugshare");
         p->fs_count = 1;
-        fprintf(stderr, "tug: sharing host dir %s as 9p (guest: mount -t 9p "
-                "-o trans=virtio tugshare /mnt/share)\n", share_dir);
     }
 
-    /* Persistent data disk -> virtio-block /dev/vda. Explicit -d wins; for
-     * tug-embedded, fall back to $TUG_DISK or "tug-data.img" beside the binary
-     * when it exists (so the self-contained build stays zero-arg yet picks up a
-     * persistent disk if the user created one). -d "" disables. */
-    {
-        char default_disk[4096];
-        const char *use_disk = NULL;
-        if (disk_explicit) {
-            use_disk = (disk_path && disk_path[0]) ? disk_path : NULL;
-        } else {
-#ifdef TUG_EMBEDDED
-            const char *env = getenv("TUG_DISK");
-            if (env && env[0]) {
-                use_disk = env;
-            } else {
-                /* tug-data.img next to the executable */
-                char exe[4096];
-                ssize_t n = -1;
-#if defined(__APPLE__)
-                uint32_t sz = sizeof(exe);
-                if (_NSGetExecutablePath(exe, &sz) == 0) n = (ssize_t)strlen(exe);
-#else
-                n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
-                if (n > 0) exe[n] = '\0';
-#endif
-                if (n > 0) {
-                    char *slash = strrchr(exe, '/');
-                    size_t dirlen = slash ? (size_t)(slash - exe + 1) : 0;
-                    snprintf(default_disk, sizeof(default_disk),
-                             "%.*stug-data.img", (int)dirlen, exe);
-                    if (access(default_disk, F_OK) == 0)
-                        use_disk = default_disk;
-                }
-            }
-#endif
+    /* persistent data disk -> virtio-block /dev/vda */
+    if (settings->disk_path && settings->disk_path[0]) {
+        BlockDevice *blk = tug_block_device_init(t, settings->disk_path);
+        if (!blk) {
+            free(t);
+            return NULL;
         }
-        if (use_disk) {
-            BlockDevice *blk = tug_block_device_init(use_disk);
-            if (blk) {
-                p->tab_drive[0].block_dev = blk;
-                p->drive_count = 1;
-            } else {
-                return 1;
-            }
-        }
+        p->tab_drive[0].block_dev = blk;
+        p->drive_count = 1;
     }
 
-    if (benchmark) {
-        clock_gettime(CLOCK_MONOTONIC, &t_start);
-        atexit(report_stats);
+    /* route guest power-off to us instead of exit() */
+    g_current = t;
+    tug_poweroff_hook = tug_on_poweroff;
+
+    t->vm = virt_machine_init(p);
+    if (!t->vm) {
+        fprintf(stderr, "tug: virt_machine_init failed\n");
+        g_current = NULL;
+        tug_poweroff_hook = NULL;
+        if (t->blk_fd >= 0) close(t->blk_fd);
+        free(t);
+        return NULL;
     }
+    if (t->vm->net)
+        t->vm->net->device_set_carrier(t->vm->net, TRUE);
+    return t;
+}
 
-    s = virt_machine_init(p);
-    if (!s) { fprintf(stderr, "tug: virt_machine_init failed\n"); return 1; }
-    if (s->net)
-        s->net->device_set_carrier(s->net, TRUE);
+int tug_run(tug *t)
+{
+    if (!t)
+        return -1;
+    while (!t->powered_off && !t->stop_flag)
+        tug_step(t);
+    if (t->host.exited)
+        t->host.exited(t->host.ctx, t->exit_status);
+    return t->exit_status;
+}
 
-    for (;;)
-        tug_run(s);
-    /* not reached: guest power-off calls exit() inside the core */
-    return 0;
+void tug_input(tug *t, const uint8_t *data, int len)
+{
+    int i;
+    if (!t || !data || len <= 0)
+        return;
+    pthread_mutex_lock(&t->in_mtx);
+    for (i = 0; i < len; i++) {
+        int next = (t->in_tail + 1) % TUG_IN_RING;
+        if (next == t->in_head)
+            break;                 /* ring full: drop the rest */
+        t->in[t->in_tail] = data[i];
+        t->in_tail = next;
+    }
+    pthread_mutex_unlock(&t->in_mtx);
+}
+
+void tug_resize(tug *t, int cols, int rows)
+{
+    if (!t || cols < 4 || rows < 4)
+        return;
+    t->cols = cols;
+    t->rows = rows;
+    t->resize_pending = 1;
+}
+
+void tug_stop(tug *t)
+{
+    if (t)
+        t->stop_flag = 1;
+}
+
+void tug_free(tug *t)
+{
+    if (!t)
+        return;
+    if (t->blk_fd >= 0) {
+        fsync(t->blk_fd);
+        close(t->blk_fd);
+        t->blk_fd = -1;
+    }
+    if (g_current == t) {
+        g_current = NULL;
+        tug_poweroff_hook = NULL;
+    }
+    pthread_mutex_destroy(&t->in_mtx);
+    free(t);
 }

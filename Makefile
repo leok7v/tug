@@ -233,11 +233,15 @@ boot6: $(TEMU) $(INITRAMFS) $(IMAGE_DIR)/$(CFG)
 # core programmatically (no JSON config). Links the core objects built for temu,
 # minus Bellard's temu.o (its own main) and slirp (host net callbacks live in
 # temu.c). Usage: ./tug [-m MB] [-a cmdline] [-b] <bbl> <Image> [initrd]
+# The engine lives in src/tug.c (the embeddable library, tug.h); src/tug_main.c
+# is the CLI front-end. All three binaries link both.
+TUG_SRC := src/tug.c src/tug_main.c
+TUG_HDR := src/tug.h
 TUG_BIN := tug
 orchestrator: $(TUG_BIN)
-$(TUG_BIN): src/tug.c $(TEMU)
-	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -g -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
-	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c \
+$(TUG_BIN): $(TUG_SRC) $(TUG_HDR) $(TEMU)
+	$(TEMU_CC) -I$(TINYEMU_DIR) -Isrc -O2 -g -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
+	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 $(TUG_SRC) \
 	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TINYEMU_DIR)/slirp/*.o $(TEMU_LIBS) -o $@
 	@echo "built orchestrator: $@  (./tug -b <bbl> <Image> [initrd] to benchmark)"
 
@@ -277,28 +281,28 @@ $(BUSYBOX_BIN): $(TC_GCC)
 	bash scripts/build-busybox.sh "$(TC)" "$(CURDIR)/$(VENDOR)"
 
 embed: $(EMBED_BIN)
-$(EMBED_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-init $(BASH_BIN) $(CURL_BIN) $(BUSYBOX_BIN)
+$(EMBED_BIN): $(TUG_SRC) $(TUG_HDR) $(TEMU) $(INITRAMFS) config/tug-init $(BASH_BIN) $(CURL_BIN) $(BUSYBOX_BIN)
 	@mkdir -p generated
 	TUG_BASH="$(CURDIR)/$(BASH_BIN)" TUG_CURL="$(CURDIR)/$(CURL_BIN)" TUG_CACERT="$(CURDIR)/$(CACERT)" \
 	  TUG_BUSYBOX="$(CURDIR)/$(BUSYBOX_BIN)" \
 	  bash scripts/embed-gen.sh "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-init" \
 	  "$(CURDIR)/$(BBL_BIN)" "$(CURDIR)/$(KERNEL6)" "$(CURDIR)/$(EMBED_INITRD)" "$(CURDIR)/$(EMBED_S)"
-	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -DTUG_EMBEDDED -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
-	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c $(EMBED_S) \
+	$(TEMU_CC) -I$(TINYEMU_DIR) -Isrc -O2 -DTUG_EMBEDDED -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
+	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 $(TUG_SRC) $(EMBED_S) \
 	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TINYEMU_DIR)/slirp/*.o $(TEMU_LIBS) -o $@
 	@echo "built self-contained $@ (`du -h $@ | cut -f1`) — run: ./$@  (no args)"
 
 # Self-contained apk build: like `embed`, but bakes the Alpine seed + apk-init.
 # Run `make disk` once, then ./tug-embedded-apk auto-attaches ./tug-data.img.
 embed-apk: $(EMBED_APK_BIN)
-$(EMBED_APK_BIN): src/tug.c $(TEMU) $(INITRAMFS) config/tug-apk-init $(CURL_BIN) $(BUSYBOX_BIN) $(ALPINE_TGZ) $(BBL_BIN) $(KERNEL6)
+$(EMBED_APK_BIN): $(TUG_SRC) $(TUG_HDR) $(TEMU) $(INITRAMFS) config/tug-apk-init $(CURL_BIN) $(BUSYBOX_BIN) $(ALPINE_TGZ) $(BBL_BIN) $(KERNEL6)
 	@mkdir -p generated
 	TUG_CURL="$(CURDIR)/$(CURL_BIN)" TUG_CACERT="$(CURDIR)/$(CACERT)" \
 	  TUG_BUSYBOX="$(CURDIR)/$(BUSYBOX_BIN)" TUG_ALPINE_SEED="$(CURDIR)/$(ALPINE_TGZ)" \
 	  bash scripts/embed-gen.sh "$(CURDIR)/$(ROOTFS_DIR)/fs" "$(CURDIR)/config/tug-apk-init" \
 	  "$(CURDIR)/$(BBL_BIN)" "$(CURDIR)/$(KERNEL6)" "$(CURDIR)/$(EMBED_APK_INITRD)" "$(CURDIR)/$(EMBED_APK_S)"
-	$(TEMU_CC) -I$(TINYEMU_DIR) -O2 -DTUG_EMBEDDED -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
-	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 src/tug.c $(EMBED_APK_S) \
+	$(TEMU_CC) -I$(TINYEMU_DIR) -Isrc -O2 -DTUG_EMBEDDED -DCONFIG_SLIRP -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE \
+	  -D_GNU_SOURCE -DCONFIG_RISCV_MAX_XLEN=64 $(TUG_SRC) $(EMBED_APK_S) \
 	  `ls $(TINYEMU_DIR)/*.o | grep -v '/temu\.o$$'` $(TINYEMU_DIR)/slirp/*.o $(TEMU_LIBS) -o $@
 	@echo "built self-contained $@ (`du -h $@ | cut -f1`) — run: make disk && ./$@"
 
