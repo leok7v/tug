@@ -1,0 +1,57 @@
+# Boat — universal SwiftUI app shell for tug (macOS + iPadOS + iOS).
+# Generate/refresh the Xcode project with:   xcodegen   (or: make)
+#
+# One multiplatform target. No `#if os(...)` in the Swift: platform code lives in
+# Platform-iOS.swift / Platform-macOS.swift, each compiled only for its SDK via
+# EXCLUDED_SOURCE_FILE_NAMES (the file excluded from the *other* SDK).
+name: boat
+options:
+  bundleIdPrefix: dev.leok7v
+  createIntermediateGroups: true
+  schemePathPrefix: "./"
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+schemes:
+  Boat:
+    build:
+      targets: { Boat: all }
+    run: { config: Debug }
+    archive: { config: Release }
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Boat:
+    type: application
+    supportedDestinations: [macOS, iOS]
+    deploymentTarget:
+      macOS: "14.0"
+      iOS: "17.0"
+    sources:
+      - Boat.swift
+      - Platform-iOS.swift
+      - Platform-macOS.swift
+    settings:
+      base:
+        PRODUCT_NAME: Boat
+        PRODUCT_BUNDLE_IDENTIFIER: dev.leok7v.boat
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: Boat
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "tug — MIT"
+        # compile each platform file only for its own SDK (no #if in the source)
+        "EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]": "Platform-iOS.swift"
+        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]": "Platform-macOS.swift"
+        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]": "Platform-macOS.swift"
+        # build/verify without a signing team (simulator + local macOS)
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
