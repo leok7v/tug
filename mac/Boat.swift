@@ -97,8 +97,15 @@ final class TugEngine: @unchecked Sendable {
             onOutput(Array("[tug] error: bundled payload missing\r\n".utf8)); return
         }
 
+        // Writable Alpine data disk (apk userland + the `essentials` toolchains),
+        // expanded from the bundled sparse image into Documents on first launch.
+        let diskPath = DiskStore.dataDiskPath()
+        if diskPath == nil {
+            onOutput(Array("[tug] warning: data disk unavailable — apk won't persist\r\n".utf8))
+        }
+
         var settings = tug_settings()
-        settings.ram_mb = 256
+        settings.ram_mb = 512
         settings.bios   = UnsafePointer(bios.baseAddress);   settings.bios_len   = Int32(bios.count)
         settings.kernel = UnsafePointer(kernel.baseAddress); settings.kernel_len = Int32(kernel.count)
         settings.initrd = UnsafePointer(initrd.baseAddress); settings.initrd_len = Int32(initrd.count)
@@ -116,8 +123,16 @@ final class TugEngine: @unchecked Sendable {
             me.onExit(status)
         }
 
-        handle = withUnsafePointer(to: &settings) { sp in
-            withUnsafePointer(to: &host) { hp in tug_new(sp, hp) }
+        // disk_path only needs to be valid across tug_new (it opens the file there).
+        func makeEngine() -> OpaquePointer? {
+            withUnsafePointer(to: &settings) { sp in
+                withUnsafePointer(to: &host) { hp in tug_new(sp, hp) }
+            }
+        }
+        if let dp = diskPath {
+            handle = dp.withCString { c in settings.disk_path = c; return makeEngine() }
+        } else {
+            handle = makeEngine()
         }
         guard handle != nil else { onOutput(Array("[tug] error: tug_new failed\r\n".utf8)); return }
 
@@ -152,6 +167,61 @@ final class TugEngine: @unchecked Sendable {
         _ = data.copyBytes(to: buf)
         blobs.append(buf)
         return buf
+    }
+}
+
+// MARK: - DiskStore (first-launch sparse-expand of the bundled data disk)
+
+/// The Alpine data disk is shipped as a compact sparse manifest (build-sparse.py)
+/// because iOS can't create an ext4 filesystem and the raw image is 32 GB. On
+/// first launch we expand it into the app's Documents as a sparse file (only the
+/// ~26 MB of real data consumes storage; it grows as apk installs packages).
+enum DiskStore {
+    private struct Bad: Error {}
+
+    /// Path to the writable data disk, expanding it on first use. Nil on failure.
+    static func dataDiskPath() -> String? {
+        let fm = FileManager.default
+        guard let docs = try? fm.url(for: .documentDirectory, in: .userDomainMask,
+                                     appropriateFor: nil, create: true) else { return nil }
+        let dst = docs.appendingPathComponent("tug-data.img")
+        if fm.fileExists(atPath: dst.path) { return dst.path }
+        guard let src = Bundle.main.url(forResource: "data", withExtension: "sparse") else { return nil }
+        do { try expand(from: src, to: dst); return dst.path }
+        catch { try? fm.removeItem(at: dst); return nil }
+    }
+
+    private static func expand(from src: URL, to dst: URL) throws {
+        let data = try Data(contentsOf: src, options: .mappedIfSafe)
+        var i = 0
+        func need(_ n: Int) throws { if i + n > data.count { throw Bad() } }
+        func u64() throws -> UInt64 {
+            try need(8)
+            var v: UInt64 = 0
+            for k in 0..<8 { v |= UInt64(data[i + k]) << (8 * k) }
+            i += 8
+            return v
+        }
+        try need(8)
+        guard data[0..<8].elementsEqual("TUGSPRS1".utf8) else { throw Bad() }
+        i = 8
+        let total = try u64()
+
+        let fd = open(dst.path, O_CREAT | O_WRONLY | O_TRUNC, 0o644)
+        guard fd >= 0 else { throw Bad() }
+        defer { close(fd) }
+        guard ftruncate(fd, off_t(total)) == 0 else { throw Bad() }   // sparse hole
+
+        while i < data.count {
+            let off = try u64()
+            let len = Int(try u64())
+            try need(len)
+            let wrote = data.withUnsafeBytes { raw -> Int in
+                pwrite(fd, raw.baseAddress!.advanced(by: i), len, off_t(off))
+            }
+            guard wrote == len else { throw Bad() }
+            i += len
+        }
     }
 }
 

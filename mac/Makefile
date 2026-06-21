@@ -11,18 +11,19 @@
 SIM ?= iPhone 17 Pro
 ICON_SRC ?= ../www/tug-icon.png
 ICONSET := Assets.xcassets/AppIcon.appiconset
-PAYLOAD := payload/bios.bin payload/kernel.bin payload/initrd.cgz
+PAYLOAD := payload/bios.bin payload/kernel.bin payload/initrd.cgz payload/data.sparse
 .PHONY: all mac ios icons open clean payload
 
 all: boat.xcodeproj
 
-# Guest payload bundled as app resources. Depends on the repo build artifacts
-# (run `make build embed` at the repo root first).
+# Guest payload bundled as app resources: bios + kernel + the apk initramfs, plus
+# the pre-seeded Alpine data disk packed into a sparse manifest. Build the repo
+# artifacts first (at the repo root):  make embed-apk disk-seeded
 payload: $(PAYLOAD)
-$(PAYLOAD): stage-payload.sh ../vendors/diskimage/bbl64.bin ../vendors/diskimage/Image-c2w ../generated/tug-embed.cpio.gz
+$(PAYLOAD): stage-payload.sh build-sparse.py ../vendors/diskimage/bbl64.bin ../vendors/diskimage/Image-c2w ../generated/tug-embed-apk.cpio.gz ../tug-seed.img
 	bash stage-payload.sh
 
-boat.xcodeproj: project.yml Boat.swift Platform-iOS.swift Platform-macOS.swift Boat-Bridging.h $(PAYLOAD)
+boat.xcodeproj: project.yml Boat.swift Terminal.swift Platform-iOS.swift Platform-macOS.swift Boat-Bridging.h $(PAYLOAD)
 	xcodegen generate
 
 # Generate every AppIcon size from one source image (icon is square, no alpha).

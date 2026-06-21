@@ -40,6 +40,7 @@
 		D8E62F72357C886AAFB293AA /* initrd.cgz in Resources */ = {isa = PBXBuildFile; fileRef = E339D89A8390F1A7FD9DBDAF /* initrd.cgz */; };
 		E2CBC7F1CAA76B817333442F /* riscv_cpu_xlen32.c in Sources */ = {isa = PBXBuildFile; fileRef = EE3558BA57EC7DC3C1F1A4B5 /* riscv_cpu_xlen32.c */; };
 		E6BB882A502B3BC2C0401E15 /* riscv_machine.c in Sources */ = {isa = PBXBuildFile; fileRef = ADF6A065643307B15C05E58D /* riscv_machine.c */; };
+		E7BAB6D51E5115FA61A84511 /* data.sparse in Resources */ = {isa = PBXBuildFile; fileRef = D7C8B2C807FBE4CB33E44327 /* data.sparse */; };
 		E8D3C0F8BE86B8CCBACA6015 /* ip_icmp.c in Sources */ = {isa = PBXBuildFile; fileRef = B64E6059E719D8DC361C31ED /* ip_icmp.c */; };
 		F76B6FC610AE5B99079C3939 /* pci.c in Sources */ = {isa = PBXBuildFile; fileRef = 862428A58CD6DC6C8FF43EF7 /* pci.c */; };
 		FA0ACFD46219A913A05FA34C /* cksum.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F055EBC07DAAE5A06316A03 /* cksum.c */; };
@@ -81,6 +82,7 @@
 		CDDD04597C4191DB90274992 /* riscv_cpu_xlen64.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = riscv_cpu_xlen64.c; sourceTree = "<group>"; };
 		CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_timer.c; sourceTree = "<group>"; };
 		D5B3756C2C3C2F7CDC67E6FB /* socket.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = socket.c; sourceTree = "<group>"; };
+		D7C8B2C807FBE4CB33E44327 /* data.sparse */ = {isa = PBXFileReference; path = data.sparse; sourceTree = "<group>"; };
 		E0F5EF75D5AE3549F393034F /* simplefb.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = simplefb.c; sourceTree = "<group>"; };
 		E339D89A8390F1A7FD9DBDAF /* initrd.cgz */ = {isa = PBXFileReference; path = initrd.cgz; sourceTree = "<group>"; };
 		E91D39475AB672B65BEC731C /* kernel.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = kernel.bin; sourceTree = "<group>"; };
@@ -94,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				9B1E0F0233DC95696269490F /* bios.bin */,
+				D7C8B2C807FBE4CB33E44327 /* data.sparse */,
 				E339D89A8390F1A7FD9DBDAF /* initrd.cgz */,
 				E91D39475AB672B65BEC731C /* kernel.bin */,
 			);
@@ -254,6 +257,7 @@
 			files = (
 				D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */,
 				2D5BEE5EF8B3F48364880153 /* bios.bin in Resources */,
+				E7BAB6D51E5115FA61A84511 /* data.sparse in Resources */,
 				D8E62F72357C886AAFB293AA /* initrd.cgz in Resources */,
 				0B36EC40A8D8348BAB86C6E8 /* kernel.bin in Resources */,
 			);

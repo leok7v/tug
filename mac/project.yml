@@ -58,12 +58,16 @@ targets:
       - ../vendors/tinyemu/softfp.c
       - path: ../vendors/tinyemu/slirp
         includes: ["*.c"]
-      # guest payload baked in as app resources (staged by mac/stage-payload.sh)
+      # guest payload baked in as app resources (staged by mac/stage-payload.sh):
+      # bios/kernel/apk-initrd, plus the pre-seeded Alpine data disk packed as a
+      # sparse manifest (expanded into Documents on first launch).
       - path: payload/bios.bin
         buildPhase: resources
       - path: payload/kernel.bin
         buildPhase: resources
       - path: payload/initrd.cgz
+        buildPhase: resources
+      - path: payload/data.sparse
         buildPhase: resources
     settings:
       base:
