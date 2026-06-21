@@ -110,7 +110,7 @@ endif
 
 .PHONY: help deps vendors build \
         toolchain headers rootfs boot6 orchestrator embed bash curl busyboxvi kernel \
-        alpine disk apkboot embed-apk \
+        alpine disk disk-seeded apkboot embed-apk \
         clean distclean
 
 help:
@@ -325,6 +325,21 @@ $(DATA_DISK):
 	$(MKE2FS) -q -t ext4 -L tugdata -m 0 -i 65536 \
 	  -E nodiscard,lazy_itable_init=1,lazy_journal_init=1 -F $@
 	@echo "data disk: $@  ($(DISK_SIZE) sparse, on-disk `du -h $@ | cut -f1`)"
+
+# A *pre-seeded* disk for shipping (e.g. bundling into the Boat app): a fresh disk
+# booted once through tug-embedded-apk so its init extracts the Alpine userland,
+# then powered off. Separate file ($(SEED_DISK), default tug-seed.img) so it never
+# clobbers a working tug-data.img. No toolchains installed; the first-boot
+# "install essentials?" prompt is preserved for the end user.
+SEED_DISK ?= tug-seed.img
+disk-seeded: $(SEED_DISK)
+$(SEED_DISK): $(EMBED_APK_BIN)
+	rm -f $@
+	truncate -s $(DISK_SIZE) $@
+	$(MKE2FS) -q -t ext4 -L tugdata -m 0 -i 65536 \
+	  -E nodiscard,lazy_itable_init=1,lazy_journal_init=1 -F $@
+	bash scripts/seed-disk.sh "$(CURDIR)/$(EMBED_APK_BIN)" "$(CURDIR)/$@"
+	@echo "seeded disk: $@  (on-disk `du -h $@ | cut -f1`)"
 
 # Boot the persistent Alpine guest: our 6.x kernel + a tiny initramfs that
 # mounts /dev/vda, first-boot-seeds it from the baked Alpine minirootfs, then
