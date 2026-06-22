@@ -28,6 +28,13 @@ enum Pasteboard {
     static func set(_ s: String) { UIPasteboard.general.string = s }
 }
 
+/// iOS has no hardware virtualization — always the RISC-V interpreter.
+func makeGuestSession(_ arch: GuestArch,
+                      onOutput: @escaping @Sendable ([UInt8]) -> Void,
+                      onExit: @escaping @Sendable (Int32) -> Void) -> any GuestSession {
+    TugEngine(onOutput: onOutput, onExit: onExit)
+}
+
 extension View {
     /// No shift-click on iOS — the hardware-keyboard modifier gesture is macOS-only.
     func shiftClickExtend(in space: String, _ action: @escaping (CGPoint) -> Void) -> some View { self }

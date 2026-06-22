@@ -35,5 +35,27 @@ struct BoatApp: SwiftUI.App {
         Window("Boat", id: "boat") {
             RootView(console: console)
         }
+        Settings { BoatSettingsView() }
+    }
+}
+
+/// Settings (Cmd-,): pick the guest backend. macOS only — iOS has no choice.
+struct BoatSettingsView: View {
+    @AppStorage("guestArch") private var guestArch = GuestArch.riscv.rawValue
+
+    var body: some View {
+        Form {
+            Picker("Guest architecture", selection: $guestArch) {
+                ForEach(GuestArch.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) }
+            }
+            .pickerStyle(.radioGroup)
+            Text("RISC-V runs the TinyEMU interpreter (portable, the iOS/Android "
+               + "engine). ARM64 runs a hardware-virtualized Linux via Apple "
+               + "Virtualization (≈12× faster — macOS only). Relaunch to apply.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(width: 420)
     }
 }

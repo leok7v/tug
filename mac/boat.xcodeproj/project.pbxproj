@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		09E3ED20579739B43A02BD33 /* slirp.c in Sources */ = {isa = PBXBuildFile; fileRef = 89C951203F20E27FC407304D /* slirp.c */; };
 		0B36EC40A8D8348BAB86C6E8 /* kernel.bin in Resources */ = {isa = PBXBuildFile; fileRef = E91D39475AB672B65BEC731C /* kernel.bin */; };
+		15BD25B311B99FF5F1B650FB /* ARM64Session-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A2BE69846EC463C3FBBB24F /* ARM64Session-macOS.swift */; };
 		16805CCC5001E80C76593E4E /* Platform-iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */; };
 		20A5CF7D3CAB177A5FF34E3B /* tcp_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 67D44662AA47880F7459743B /* tcp_input.c */; };
+		264697C603902AA72E75194F /* initrd-arm64.cgz in Resources */ = {isa = PBXBuildFile; fileRef = FFF035020BEB65550FE00B15 /* initrd-arm64.cgz */; };
 		28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 457C7DBAF6151797012150AA /* Boat.swift */; };
 		2D5BEE5EF8B3F48364880153 /* bios.bin in Resources */ = {isa = PBXBuildFile; fileRef = 9B1E0F0233DC95696269490F /* bios.bin */; };
 		3EFC1867BE6BBE2D384840E5 /* sbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = C8E89EA84383DA3A3F77EB0F /* sbuf.c */; };
@@ -45,6 +47,7 @@
 		E7BAB6D51E5115FA61A84511 /* data.sparse in Resources */ = {isa = PBXBuildFile; fileRef = D7C8B2C807FBE4CB33E44327 /* data.sparse */; };
 		E8D3C0F8BE86B8CCBACA6015 /* ip_icmp.c in Sources */ = {isa = PBXBuildFile; fileRef = B64E6059E719D8DC361C31ED /* ip_icmp.c */; };
 		F76B6FC610AE5B99079C3939 /* pci.c in Sources */ = {isa = PBXBuildFile; fileRef = 862428A58CD6DC6C8FF43EF7 /* pci.c */; };
+		F7D96B1F2F7AC88EE98DD857 /* kernel-arm64.bin in Resources */ = {isa = PBXBuildFile; fileRef = 27EBC46097F19DFA98A5838C /* kernel-arm64.bin */; };
 		FA0ACFD46219A913A05FA34C /* cksum.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F055EBC07DAAE5A06316A03 /* cksum.c */; };
 		FB202D2455FB901CB197FDBF /* if.c in Sources */ = {isa = PBXBuildFile; fileRef = FA6D5BF8E2E658F6813229EF /* if.c */; };
 		FDF1F080434FF0A6C0C9361B /* machine.c in Sources */ = {isa = PBXBuildFile; fileRef = A98CA21D793C31A64BD22D7F /* machine.c */; };
@@ -53,6 +56,7 @@
 /* Begin PBXFileReference section */
 		1C0BDCA7ACFAB72B09C71A9B /* json.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json.c; sourceTree = "<group>"; };
 		228A716A6790D53BA5ED4CD9 /* virtio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = virtio.c; sourceTree = "<group>"; };
+		27EBC46097F19DFA98A5838C /* kernel-arm64.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "kernel-arm64.bin"; sourceTree = "<group>"; };
 		2F055EBC07DAAE5A06316A03 /* cksum.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cksum.c; sourceTree = "<group>"; };
 		3383587608FB7AB4C0192E94 /* cutils.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cutils.c; sourceTree = "<group>"; };
 		394DDAFE9197A3A054DF0B8A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -63,6 +67,7 @@
 		5C397FCDC262AAC9EF73A50F /* fs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fs.c; sourceTree = "<group>"; };
 		61E2E907BFF256DE3B26335C /* App-iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App-iOS.swift"; sourceTree = "<group>"; };
 		67D44662AA47880F7459743B /* tcp_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_input.c; sourceTree = "<group>"; };
+		6A2BE69846EC463C3FBBB24F /* ARM64Session-macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ARM64Session-macOS.swift"; sourceTree = "<group>"; };
 		7290CE6E54C4591F1E054136 /* Boat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Boat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		771F0A9A997B5B172BA302CC /* App-macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App-macOS.swift"; sourceTree = "<group>"; };
 		862428A58CD6DC6C8FF43EF7 /* pci.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pci.c; sourceTree = "<group>"; };
@@ -93,6 +98,7 @@
 		EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Platform-macOS.swift"; sourceTree = "<group>"; };
 		EE3558BA57EC7DC3C1F1A4B5 /* riscv_cpu_xlen32.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = riscv_cpu_xlen32.c; sourceTree = "<group>"; };
 		FA6D5BF8E2E658F6813229EF /* if.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = if.c; sourceTree = "<group>"; };
+		FFF035020BEB65550FE00B15 /* initrd-arm64.cgz */ = {isa = PBXFileReference; path = "initrd-arm64.cgz"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -101,7 +107,9 @@
 			children = (
 				9B1E0F0233DC95696269490F /* bios.bin */,
 				D7C8B2C807FBE4CB33E44327 /* data.sparse */,
+				FFF035020BEB65550FE00B15 /* initrd-arm64.cgz */,
 				E339D89A8390F1A7FD9DBDAF /* initrd.cgz */,
+				27EBC46097F19DFA98A5838C /* kernel-arm64.bin */,
 				E91D39475AB672B65BEC731C /* kernel.bin */,
 			);
 			path = payload;
@@ -138,6 +146,7 @@
 			children = (
 				61E2E907BFF256DE3B26335C /* App-iOS.swift */,
 				771F0A9A997B5B172BA302CC /* App-macOS.swift */,
+				6A2BE69846EC463C3FBBB24F /* ARM64Session-macOS.swift */,
 				394DDAFE9197A3A054DF0B8A /* Assets.xcassets */,
 				457C7DBAF6151797012150AA /* Boat.swift */,
 				8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */,
@@ -264,7 +273,9 @@
 				D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */,
 				2D5BEE5EF8B3F48364880153 /* bios.bin in Resources */,
 				E7BAB6D51E5115FA61A84511 /* data.sparse in Resources */,
+				264697C603902AA72E75194F /* initrd-arm64.cgz in Resources */,
 				D8E62F72357C886AAFB293AA /* initrd.cgz in Resources */,
+				F7D96B1F2F7AC88EE98DD857 /* kernel-arm64.bin in Resources */,
 				0B36EC40A8D8348BAB86C6E8 /* kernel.bin in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -276,6 +287,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				15BD25B311B99FF5F1B650FB /* ARM64Session-macOS.swift in Sources */,
 				78E387967B4BF4EB39031B9E /* App-iOS.swift in Sources */,
 				6678B504BFFE38A50D934EFD /* App-macOS.swift in Sources */,
 				28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */,
@@ -459,10 +471,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "Boat-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift";
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift App-iOS.swift";
 				GCC_OPTIMIZATION_LEVEL = 2;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -515,10 +528,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "Boat-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift";
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift App-iOS.swift";
 				GCC_OPTIMIZATION_LEVEL = 2;
 				GCC_PREPROCESSOR_DEFINITIONS = (

@@ -46,6 +46,7 @@ targets:
       - App-iOS.swift
       - Platform-iOS.swift
       - Platform-macOS.swift
+      - ARM64Session-macOS.swift
       - Assets.xcassets
       # tug engine (embeddable library) + the TinyEMU core it drives. Same object
       # set the Makefile links for `tug`, minus temu.o (its own main) — Boat
@@ -78,6 +79,13 @@ targets:
       - path: payload/initrd.cgz
         buildPhase: resources
       - path: payload/data.sparse
+        buildPhase: resources
+      # ARM64 (macOS/VZ) payload — our own arm64 kernel + Alpine aarch64 initramfs.
+      # (Bundled on all platforms for now; iOS doesn't use it — a per-SDK resource
+      # split is a future size optimization.)
+      - path: payload/kernel-arm64.bin
+        buildPhase: resources
+      - path: payload/initrd-arm64.cgz
         buildPhase: resources
     settings:
       base:
@@ -134,8 +142,11 @@ targets:
         INFOPLIST_KEY_NSHumanReadableCopyright: "tug — MIT"
         # compile each platform file only for its own SDK (no #if in the source)
         "EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]": "Platform-iOS.swift App-iOS.swift"
-        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]": "Platform-macOS.swift App-macOS.swift"
-        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]": "Platform-macOS.swift App-macOS.swift"
+        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]": "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift"
+        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]": "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift"
+        # Virtualization.framework entitlement (macOS only; auto-linked from the
+        # `import Virtualization` in ARM64Session-macOS.swift).
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": "Boat-macOS.entitlements"
         # Automatic signing so the app installs on a real device. Headless
         # simulator/macOS verification (make mac / make ios) still passes
         # CODE_SIGNING_ALLOWED=NO on the xcodebuild command line to skip it.

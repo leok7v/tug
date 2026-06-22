@@ -44,6 +44,14 @@ extension GuestSession { func shutdown() { shutdown(timeout: 6) } }
 /// The single live guest, for the app lifecycle (clean power-off on quit/close).
 enum Guest { nonisolated(unsafe) static weak var current: (any GuestSession)? }
 
+/// Which guest to boot. RISC-V (TinyEMU interpreter) runs everywhere; ARM64
+/// (Virtualization.framework, ~native via HVF) is macOS-only. The per-platform
+/// `makeGuestSession(...)` factory maps this to a backend.
+enum GuestArch: String, CaseIterable, Sendable {
+    case riscv = "RISC-V"
+    case arm64 = "ARM64"
+}
+
 // MARK: - Console (VT100 terminal + the real tug engine)
 
 @MainActor @Observable
@@ -56,11 +64,14 @@ final class Console {
 
     init() { terminal.feedString("[tug] booting…\r\n") }
 
-    /// Boot the RISC-V guest. Idempotent; called once from the view's onAppear.
+    /// Boot the selected guest (RISC-V everywhere, ARM64/VZ on macOS). Idempotent;
+    /// called once from the view's onAppear. The backend is chosen by the
+    /// per-platform `makeGuestSession(...)` factory from the persisted arch.
     func start() {
         guard engine == nil else { return }
+        let arch = GuestArch(rawValue: UserDefaults.standard.string(forKey: "guestArch") ?? "") ?? .riscv
         terminal.respond = { [weak self] bytes in self?.engine?.input(bytes) }
-        let e = TugEngine(
+        let e = makeGuestSession(arch,
             onOutput: { [weak self] bytes in
                 Task { @MainActor in self?.terminal.feed(bytes) }
             },

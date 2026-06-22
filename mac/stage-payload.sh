@@ -27,4 +27,15 @@ cp -f "$bios"   "$out/bios.bin"
 cp -f "$kernel" "$out/kernel.bin"
 cp -f "$initrd" "$out/initrd.cgz"
 python3 "$here/build-sparse.py" "$seed" "$out/data.sparse"
-echo "staged payload -> $out  (bios.bin kernel.bin initrd.cgz data.sparse)"
+
+# ARM64 (macOS/VZ) payload — our own arm64 kernel + an Alpine aarch64 initramfs.
+# Optional: only present once the arm64 stack is built (see mac/vz-spike).
+karm="$repo/vendors/diskimage/Image-arm64"
+iarm="$here/vz-spike/alpine-arm64.cpio.gz"
+if [ -f "$karm" ] && [ -f "$iarm" ]; then
+  cp -f "$karm" "$out/kernel-arm64.bin"
+  cp -f "$iarm" "$out/initrd-arm64.cgz"
+  echo "staged payload -> $out  (riscv + arm64)"
+else
+  echo "staged payload -> $out  (riscv only; arm64 kernel/initrd not built yet)"
+fi
