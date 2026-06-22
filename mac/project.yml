@@ -85,6 +85,12 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.leok7v.boat
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # --- tug engine / TinyEMU C build ---
+        # Optimize the C (emulator) even in Debug — the Boat target's only C is the
+        # vendored TinyEMU core + tug.c, which we don't step through; at the Debug
+        # default of -O0 the interpreter runs several times slower. Swift keeps its
+        # per-config level (SWIFT_OPTIMIZATION_LEVEL: -Onone in Debug, still
+        # debuggable). Release C is -O2 too (vs the -Os default), for speed.
+        GCC_OPTIMIZATION_LEVEL: "2"
         SWIFT_OBJC_BRIDGING_HEADER: Boat-Bridging.h
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/../vendors/tinyemu"

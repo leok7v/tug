@@ -464,6 +464,7 @@
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift App-iOS.swift";
+				GCC_OPTIMIZATION_LEVEL = 2;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					CONFIG_SLIRP,
@@ -519,6 +520,7 @@
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift";
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift App-iOS.swift";
+				GCC_OPTIMIZATION_LEVEL = 2;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					CONFIG_SLIRP,
