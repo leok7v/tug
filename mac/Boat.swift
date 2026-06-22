@@ -50,6 +50,16 @@ enum Guest { nonisolated(unsafe) static weak var current: (any GuestSession)? }
 enum GuestArch: String, CaseIterable, Sendable {
     case riscv = "RISC-V"
     case arm64 = "ARM64"
+
+    /// Default backend per platform: macOS prefers the ~12× ARM64/HVF guest;
+    /// iOS has no Virtualization.framework, so it stays on the RISC-V interpreter.
+    static var defaultForPlatform: GuestArch {
+        #if os(macOS)
+        return .arm64
+        #else
+        return .riscv
+        #endif
+    }
 }
 
 // MARK: - Console (VT100 terminal + the real tug engine)
@@ -73,7 +83,7 @@ final class Console {
     func start() {
         guard engine == nil else { return }
         let gen = generation
-        let arch = GuestArch(rawValue: UserDefaults.standard.string(forKey: "guestArch") ?? "") ?? .riscv
+        let arch = GuestArch(rawValue: UserDefaults.standard.string(forKey: "guestArch") ?? "") ?? .defaultForPlatform
         terminal.respond = { [weak self] bytes in self?.engine?.input(bytes) }
         let e = makeGuestSession(arch,
             onOutput: { [weak self] bytes in
@@ -385,7 +395,7 @@ struct TerminalView: View {
     @FocusState private var focused: Bool
     // Live backend switch: when the Settings arch picker changes, restart the
     // guest in place. (Only changes on macOS, where the picker exists.)
-    @AppStorage("guestArch") private var guestArch = GuestArch.riscv.rawValue
+    @AppStorage("guestArch") private var guestArch = GuestArch.defaultForPlatform.rawValue
 
     var body: some View {
         TerminalScreenView(console: console, focused: focused) { cols, rows in

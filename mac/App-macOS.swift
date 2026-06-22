@@ -41,7 +41,7 @@ struct BoatApp: SwiftUI.App {
 
 /// Settings (Cmd-,): pick the guest backend. macOS only — iOS has no choice.
 struct BoatSettingsView: View {
-    @AppStorage("guestArch") private var guestArch = GuestArch.riscv.rawValue
+    @AppStorage("guestArch") private var guestArch = GuestArch.defaultForPlatform.rawValue
 
     var body: some View {
         Form {

@@ -57,6 +57,7 @@ mkdir -p "$R/sbin"
 cat > "$R/sbin/tug-login" <<'LOGIN'
 #!/bin/sh
 export HOME=/root TERM=vt100 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+echo tug > /etc/hostname 2>/dev/null; hostname tug 2>/dev/null  # prompt shows tug, not (none)
 ip link set lo up 2>/dev/null; ip link set eth0 up 2>/dev/null
 udhcpc -i eth0 -q -n >/dev/null 2>&1
 [ -s /etc/resolv.conf ] || echo 'nameserver 1.1.1.1' > /etc/resolv.conf
