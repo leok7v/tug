@@ -30,10 +30,10 @@ python3 "$here/build-sparse.py" "$seed" "$out/data.sparse"
 
 # ARM64 (macOS/VZ) payload — our own arm64 kernel + the Alpine aarch64 apk
 # initramfs (self-seeds /dev/vda on first boot) + an empty ext4 data disk packed
-# sparse. Present once the arm64 stack is built (see mac/vz-spike).
+# sparse. Built at the repo root with `make arm64`.
 karm="$repo/vendors/diskimage/Image-arm64"
-iarm="$here/vz-spike/alpine-arm64-apk.cpio.gz"
-darm="$here/vz-spike/data-arm64.sparse"
+iarm="$repo/generated/tug-arm64-apk.cpio.gz"
+darm="$repo/generated/data-arm64.sparse"
 if [ -f "$karm" ] && [ -f "$iarm" ] && [ -f "$darm" ]; then
   cp -f "$karm" "$out/kernel-arm64.bin"
   cp -f "$iarm" "$out/initrd-arm64.cgz"

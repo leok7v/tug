@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Build the ARM64 "apk" initramfs for VZ: the Alpine aarch64 minirootfs + an
-# /init that self-seeds an empty /dev/vda on first boot and switch_roots into it
-# (persistent apk), plus the `essentials` toolchain installer + banner + login.
-# Output: alpine-arm64-apk.cpio.gz
+# /init that self-seeds an empty ext4 /dev/vda on first boot (tar-copies itself)
+# and switch_roots into it, so apk persists — no separate seed tarball or
+# host-side seeding. Bakes in the `essentials` toolchain installer + first-login
+# offer (verbatim from config/tug-apk-init) and a VZ banner; udhcpc for VZ NAT.
+# Output: generated/tug-arm64-apk.cpio.gz
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"
-SEED=/tmp/alpine-arm64.tar.gz
-[ -f "$SEED" ] || curl -fSL -o "$SEED" https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/aarch64/alpine-minirootfs-3.24.1-aarch64.tar.gz
-rm -rf r && mkdir r && tar xzf "$SEED" -C r
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+ALPINE_TGZ="${1:?usage: build-arm64-initramfs.sh <alpine-aarch64-minirootfs.tar.gz>}"
+OUT="$REPO/generated/tug-arm64-apk.cpio.gz"
+mkdir -p "$REPO/generated"
+WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+R="$WORK/r"; mkdir -p "$R"
+tar xzf "$ALPINE_TGZ" -C "$R"
 
-# --- /init: mount + first-boot self-seed + switch_root ----------------------
-cat > r/init <<'INIT'
+cat > "$R/init" <<'INIT'
 #!/bin/sh
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin TERM=vt100
 mount -t devtmpfs dev /dev 2>/dev/null
@@ -37,11 +41,10 @@ mount -t tmpfs tmpfs "$NEWROOT/tmp" 2>/dev/null
 mkdir -p "$NEWROOT/dev/pts"; mount -t devpts devpts "$NEWROOT/dev/pts" 2>/dev/null
 exec switch_root "$NEWROOT" /sbin/tug-login
 INIT
-chmod +x r/init
+chmod +x "$R/init"
 
-# --- /sbin/tug-login: bring up VZ NAT networking, then a login shell --------
-mkdir -p r/sbin
-cat > r/sbin/tug-login <<'LOGIN'
+mkdir -p "$R/sbin"
+cat > "$R/sbin/tug-login" <<'LOGIN'
 #!/bin/sh
 export HOME=/root TERM=vt100 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ip link set lo up 2>/dev/null; ip link set eth0 up 2>/dev/null
@@ -52,11 +55,10 @@ SH=/bin/ash; [ -x /bin/bash ] && SH=/bin/bash
 export SHELL="$SH"
 exec setsid -c <>/dev/console >&0 2>&1 "$SH" -l
 LOGIN
-chmod +x r/sbin/tug-login
+chmod +x "$R/sbin/tug-login"
 
-# --- banner (aarch64 / VZ) --------------------------------------------------
-mkdir -p r/etc/profile.d
-cat > r/etc/profile.d/tug.sh <<'BANNER'
+mkdir -p "$R/etc/profile.d"
+cat > "$R/etc/profile.d/tug.sh" <<'BANNER'
 if [ -t 0 ]; then
   echo
   echo "  tug — Alpine $(. /etc/os-release 2>/dev/null; echo "$VERSION_ID") aarch64 on Apple Virtualization (HVF)"
@@ -68,17 +70,16 @@ if [ -t 0 ]; then
 fi
 BANNER
 
-# --- essentials + first-login hook (verbatim from config/tug-apk-init) -------
-mkdir -p r/usr/local/bin
-python3 - "$here/../../config/tug-apk-init" r <<'EX'
-import re,sys
-src=open(sys.argv[1]).read(); out=sys.argv[2]
-def grab(name): 
-    m=re.search(r'<<\'%s\'\n(.*?)\n%s\n'%(name,name), src, re.S); return m.group(1)
-open(out+"/usr/local/bin/essentials","w").write(grab("ESS"))
-open(out+"/etc/profile.d/zz-essentials.sh","w").write(grab("HOOK"))
+# essentials + first-login hook: verbatim from config/tug-apk-init (arch-agnostic).
+mkdir -p "$R/usr/local/bin"
+python3 - "$REPO/config/tug-apk-init" "$R" <<'EX'
+import re, sys
+src = open(sys.argv[1]).read(); out = sys.argv[2]
+def grab(name): return re.search(r"<<'%s'\n(.*?)\n%s\n" % (name, name), src, re.S).group(1)
+open(out + "/usr/local/bin/essentials", "w").write(grab("ESS"))
+open(out + "/etc/profile.d/zz-essentials.sh", "w").write(grab("HOOK"))
 EX
-chmod +x r/usr/local/bin/essentials
+chmod +x "$R/usr/local/bin/essentials"
 
-(cd r && find . | cpio -o -H newc 2>/dev/null | gzip) > alpine-arm64-apk.cpio.gz
-echo "built alpine-arm64-apk.cpio.gz ($(du -h alpine-arm64-apk.cpio.gz | cut -f1)), essentials=$(wc -l <r/usr/local/bin/essentials) lines"
+( cd "$R" && find . | cpio -o -H newc 2>/dev/null | gzip ) > "$OUT"
+echo "initrd: generated/tug-arm64-apk.cpio.gz ($(du -h "$OUT" | cut -f1))"

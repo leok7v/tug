@@ -25,10 +25,11 @@ streams), so the two plug in behind one `GuestSession` seam.
   serial console to stdin/stdout, exit on guest power-off. ~40 lines.
 - `vz.entitlements` — `com.apple.security.virtualization`; ad-hoc `codesign -s -`
   is enough for local dev (no provisioning profile).
-- `build-arm64-kernel.sh` — builds our own arm64 `Image` natively on macOS,
-  mirroring the riscv `docs/kernel.md` recipe: case-sensitive APFS volume + host
-  shims (`elf.h`/`endian.h`/`uuid_t`), `LLVM=1` (clang is the only arm64-Linux
-  compiler that runs on macOS), Linux 6.12 `defconfig` + virtio/initrd, KVM off.
+- The production arm64 build now lives in the Makefile / `scripts/`:
+  `make arm64` (= `kernel-arm64` + `initrd-arm64` + `disk-arm64`) builds our own
+  arm64 `Image` (case-sensitive APFS volume + host shims + `LLVM=1`, KVM off), the
+  Alpine aarch64 apk initramfs, and the data disk. This spike keeps only the
+  measurement harness (`bench.c`, `vzboot.swift`).
 
 ## Reproduce
 
@@ -53,8 +54,8 @@ clang -O2 bench.c -o bench-native             # native macOS proxy
 for a in riscv arm64; do rm -rf r && mkdir r && cp bench-$a r/init && chmod +x r/init
   (cd r && find . | cpio -o -H newc 2>/dev/null | gzip) > bench-$a.cpio.gz; done; rm -rf r
 
-# our arm64 kernel  ->  ../../vendors/diskimage/Image-arm64
-./build-arm64-kernel.sh
+# our arm64 payload (kernel + apk initramfs + disk)
+( cd ../.. && make arm64 )
 
 # VZ harness (sign with the entitlement)
 swiftc -O vzboot.swift -o vzboot

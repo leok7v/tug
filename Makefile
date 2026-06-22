@@ -70,6 +70,20 @@ ALPINE_TGZ  := $(VENDOR)/alpine-minirootfs-$(ALPINE_VER)-riscv64.tar.gz
 DISK_SIZE   ?= 32G
 DATA_DISK   := tug-data.img
 
+# ---------------------------------------------------------------------------
+# ARM64 (macOS / Apple Virtualization, HVF) — our own arm64 kernel + Alpine
+# aarch64. macOS runs the guest hardware-virtualized (~12x the riscv interpreter,
+# measured in mac/vz-spike). Built natively on macOS with clang/lld (LLVM=1; the
+# only arm64-Linux compiler that runs here) + a musl.cc aarch64 sysroot.
+LINUX_ARM_VER   ?= 6.12
+ALPINE_ARM_URL  := https://dl-cdn.alpinelinux.org/alpine/v$(ALPINE_REL)/releases/aarch64/alpine-minirootfs-$(ALPINE_VER)-aarch64.tar.gz
+ALPINE_ARM_SHA  := f55a90f69052c5bd6f92cb09a8f47065970830b194c917a006fb94028e721259
+ALPINE_ARM_TGZ  := $(VENDOR)/alpine-minirootfs-$(ALPINE_VER)-aarch64.tar.gz
+AARCH64_CROSS   := $(VENDOR)/aarch64-linux-musl-cross
+KERNEL_ARM      := $(IMAGE_DIR)/Image-arm64
+INITRD_ARM      := generated/tug-arm64-apk.cpio.gz
+DATA_ARM_SPARSE := generated/data-arm64.sparse
+
 TEMU_CONFIG := CONFIG_FS_NET= CONFIG_SDL= CONFIG_X86EMU= CONFIG_INT128=
 ifeq ($(UNAME_S),Darwin)
 TEMU_CC   := cc -I$(COMPAT) -include $(COMPAT)/darwin_compat.h
@@ -108,7 +122,8 @@ GNUENV  :=
 MKE2FS  := mke2fs
 endif
 
-.PHONY: help deps vendors build \
+.PHONY: aarch64-toolchain kernel-arm64 alpine-arm64 initrd-arm64 disk-arm64 arm64 \
+        help deps vendors build \
         toolchain headers rootfs boot6 orchestrator embed bash curl busyboxvi kernel \
         alpine disk disk-seeded apkboot embed-apk \
         clean distclean
@@ -138,6 +153,11 @@ help:
 	@echo "  make disk       create a sparse $(DISK_SIZE) ext4 data disk ($(DATA_DISK)); DISK_SIZE= to override (rebuild ERASES it)"
 	@echo "  make apkboot    boot the Alpine guest (seeds /dev/vda on first run); MODE=test to assert"
 	@echo "  make embed-apk  self-contained ./tug-embedded-apk (Alpine seed baked in)"
+	@echo
+	@echo "ARM64 (macOS / Apple Virtualization — the HVF backend for Boat.app):"
+	@echo "  make arm64      build the arm64 payload (our kernel + Alpine apk initramfs + disk)"
+	@echo "                  -> then  make -C mac payload && make -C mac mac"
+	@echo "  (sub-targets: aarch64-toolchain kernel-arm64 alpine-arm64 initrd-arm64 disk-arm64)"
 	@echo
 	@echo "  make clean / distclean"
 
@@ -363,6 +383,53 @@ kernel:
 	@echo "host-tool issues (case-sensitivity, GNU make, elf.h, uuid_t, ...);"
 	@echo "the recipe handles them. The prebuilt Image-c2w already lives in"
 	@echo "vendors/diskimage/ and 'make boot6' / 'make embed' use it."
+
+# ---------------------------------------------------------------------------
+# ARM64 (macOS / Apple Virtualization) — the macOS-only HVF backend payload.
+# `make arm64` builds kernel + apk initramfs + an empty data disk; then
+# `make -C mac payload` bundles them into Boat.app. macOS host only.
+# ---------------------------------------------------------------------------
+# aarch64 cross sysroot (musl.cc) + LLVM/lld. The musl.cc gcc is Linux-hosted, so
+# it won't run on macOS, but clang uses its sysroot + libgcc to build aarch64.
+aarch64-toolchain: $(AARCH64_CROSS)/bin/aarch64-linux-musl-gcc
+$(AARCH64_CROSS)/bin/aarch64-linux-musl-gcc:
+	@command -v "$(BREW)/opt/llvm/bin/clang" >/dev/null 2>&1 || brew install llvm
+	@ls "$(BREW)/opt/lld/bin/ld.lld" >/dev/null 2>&1 || brew install lld
+	@mkdir -p $(VENDOR)
+	$(CURL) -o $(VENDOR)/aarch64-linux-musl-cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
+	tar xzf $(VENDOR)/aarch64-linux-musl-cross.tgz -C $(VENDOR)
+	@echo "aarch64 sysroot: $(AARCH64_CROSS)"
+
+alpine-arm64: $(ALPINE_ARM_TGZ)
+$(ALPINE_ARM_TGZ):
+	@mkdir -p $(VENDOR)
+	$(CURL) -o $@ $(ALPINE_ARM_URL)
+	@echo "$(ALPINE_ARM_SHA)  $@" | $(SHA) -c -
+
+# Our own arm64 Image (case-sensitive volume + host shims + LLVM=1; ~10-30 min).
+kernel-arm64: $(KERNEL_ARM)
+$(KERNEL_ARM): $(AARCH64_CROSS)/bin/aarch64-linux-musl-gcc scripts/build-arm64-kernel.sh
+	LINUX_ARM_VER=$(LINUX_ARM_VER) bash scripts/build-arm64-kernel.sh
+
+# Alpine aarch64 apk initramfs (self-seeds /dev/vda + switch_root + essentials).
+initrd-arm64: $(INITRD_ARM)
+$(INITRD_ARM): scripts/build-arm64-initramfs.sh config/tug-apk-init $(ALPINE_ARM_TGZ)
+	bash scripts/build-arm64-initramfs.sh "$(CURDIR)/$(ALPINE_ARM_TGZ)"
+
+# Empty ext4 data disk packed sparse (the guest fills it on first boot).
+disk-arm64: $(DATA_ARM_SPARSE)
+$(DATA_ARM_SPARSE):
+	@mkdir -p generated
+	rm -f generated/data-arm64-empty.img
+	truncate -s $(DISK_SIZE) generated/data-arm64-empty.img
+	$(MKE2FS) -q -t ext4 -L tugdata -m 0 -i 65536 \
+	  -E nodiscard,lazy_itable_init=1,lazy_journal_init=1 -F generated/data-arm64-empty.img
+	python3 mac/build-sparse.py generated/data-arm64-empty.img $@
+	@echo "arm64 data disk (sparse): $@  (`du -h $@ | cut -f1`)"
+
+# Full arm64 payload for Boat.app (macOS/VZ).
+arm64: kernel-arm64 initrd-arm64 disk-arm64
+	@echo "arm64 payload ready — run: make -C mac payload && make -C mac mac"
 
 # ---------------------------------------------------------------------------
 clean:
