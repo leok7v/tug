@@ -1,0 +1,10 @@
+# generated/measured artifacts (toolchain, kernel, sparse build volume live under
+# vendors/ which is gitignored at the repo root)
+bench-riscv
+bench-arm64
+bench-native
+vzboot
+*.cpio.gz
+*.o
+root/
+aroot/
