@@ -219,6 +219,7 @@ final class TugEngine: @unchecked Sendable {
         }
         t.name = "tug-run"
         t.stackSize = 8 << 20
+        t.qualityOfService = .default     // matches the shutdown waiter (no inversion)
         thread = t
         t.start()
     }

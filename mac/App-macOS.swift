@@ -16,7 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // shutdown off the main thread, then let the app quit.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let engine = TugEngine.current else { return .terminateNow }
-        DispatchQueue.global(qos: .userInitiated).async {
+        // .default QoS: shutdown blocks on the tug-run thread (also .default), so a
+        // higher-QoS waiter here would be a priority inversion.
+        DispatchQueue.global(qos: .default).async {
             engine.shutdown()
             DispatchQueue.main.async { NSApp.reply(toApplicationShouldTerminate: true) }
         }
