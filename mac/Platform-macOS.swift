@@ -37,3 +37,16 @@ extension View {
                 .onEnded { action($0.location) })
     }
 }
+
+/// Real metrics of the monospaced system font, so the terminal's cell grid and
+/// the mouse hit-testing match what SwiftUI actually draws.
+enum FontMetrics {
+    static func lineHeight(_ size: CGFloat) -> CGFloat {
+        let f = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        return (f.ascender - f.descender + f.leading).rounded(.up)
+    }
+    static func advance(_ size: CGFloat) -> CGFloat {
+        let f = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        return ("M" as NSString).size(withAttributes: [.font: f]).width
+    }
+}

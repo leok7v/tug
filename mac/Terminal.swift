@@ -531,14 +531,12 @@ struct TerminalScreenView: View {
     private var terminal: Terminal { console.terminal }
 
     // Constant font: resizing the window changes the grid geometry (cols × rows),
-    // not the glyph size. cell metrics are derived from the fixed font size.
+    // not the glyph size. Cell metrics come from the REAL monospaced-font metrics
+    // (FontMetrics) so the drawn rows and the mouse hit-testing line up exactly —
+    // an approximate line height drifts a row off over the height of the screen.
     private let fontSize: CGFloat = 12
-    private let advance: CGFloat = 0.62      // monospaced glyph width / em (a hair
-                                             // wide so a full row never overflows)
-    private let lineFactor: CGFloat = 1.18
-
-    private var charW: CGFloat { fontSize * advance }
-    private var lineH: CGFloat { (fontSize * lineFactor).rounded() }
+    private var charW: CGFloat { FontMetrics.advance(fontSize) }
+    private var lineH: CGFloat { FontMetrics.lineHeight(fontSize) }
 
     /// Map a point in the scroll content to a cell boundary (row, col).
     private func hit(_ loc: CGPoint) -> Console.GridPoint {
@@ -610,8 +608,11 @@ struct TerminalScreenView: View {
                             // shift-click to extend (macOS only; no-op on iOS)
                             .shiftClickExtend(in: "term") { console.selectExtend(hit($0)) }
                         }
-                        // follow the bottom on output/input, but not mid-drag-select
-                        .onChange(of: terminal.version) { _, _ in if !dragging { proxy.scrollTo("term_bottom", anchor: .bottom) } }
+                        // defaultScrollAnchor keeps the bottom in view as output
+                        // grows (no per-frame scrollTo -> no "multiple updates per
+                        // frame"); typing jumps to the bottom via the input counter.
+                        .defaultScrollAnchor(.bottom)
+                        .onChange(of: console.inputSeq) { _, _ in proxy.scrollTo("term_bottom", anchor: .bottom) }
                         .onAppear { proxy.scrollTo("term_bottom", anchor: .bottom) }
                     }
                 }

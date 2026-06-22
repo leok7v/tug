@@ -32,3 +32,15 @@ extension View {
     /// No shift-click on iOS — the hardware-keyboard modifier gesture is macOS-only.
     func shiftClickExtend(in space: String, _ action: @escaping (CGPoint) -> Void) -> some View { self }
 }
+
+/// Real metrics of the monospaced system font, so the terminal's cell grid and
+/// touch hit-testing match what SwiftUI actually draws.
+enum FontMetrics {
+    static func lineHeight(_ size: CGFloat) -> CGFloat {
+        UIFont.monospacedSystemFont(ofSize: size, weight: .regular).lineHeight.rounded(.up)
+    }
+    static func advance(_ size: CGFloat) -> CGFloat {
+        ("M" as NSString).size(withAttributes:
+            [.font: UIFont.monospacedSystemFont(ofSize: size, weight: .regular)]).width
+    }
+}

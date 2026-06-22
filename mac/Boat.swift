@@ -34,6 +34,9 @@ final class Console {
     let terminal = Terminal()
     private var engine: TugEngine?
 
+    /// Bumped on keyboard/paste input, so the view scrolls the prompt into view.
+    private(set) var inputSeq = 0
+
     init() { terminal.feedString("[tug] booting…\r\n") }
 
     /// Boot the RISC-V guest. Idempotent; called once from the view's onAppear.
@@ -54,7 +57,7 @@ final class Console {
     }
 
     /// Feed a key from either keyboard to the guest as terminal bytes.
-    func send(_ key: KeyInput) { engine?.input(terminal.bytes(for: key)) }
+    func send(_ key: KeyInput) { inputSeq &+= 1; engine?.input(terminal.bytes(for: key)) }
 
     /// Match the on-screen grid to the guest's terminal size.
     func setSize(cols: Int, rows: Int) {
@@ -132,6 +135,7 @@ final class Console {
     func paste() {
         guard let s = Pasteboard.string, !s.isEmpty else { return }
         let cr = s.replacingOccurrences(of: "\r\n", with: "\r").replacingOccurrences(of: "\n", with: "\r")
+        inputSeq &+= 1
         engine?.input(Array(cr.utf8))
     }
 }
