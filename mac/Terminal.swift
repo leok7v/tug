@@ -441,21 +441,26 @@ final class Terminal {
         let nc = max(2, newCols), nr = max(2, newRows)
         guard nc != cols || nr != rows else { return }
 
-        // clamp/pad a row to the new column count (no long-line re-wrapping)
-        func fit(_ row: [Cell]) -> [Cell] {
+        // Grid rows are exactly nc (pad/truncate). Scrollback rows keep their full
+        // content (pad short, but never truncate) so a long line captured at a
+        // wider width wraps in the view instead of being cut off with "…".
+        func gridFit(_ row: [Cell]) -> [Cell] {
             if row.count == nc { return row }
             if row.count > nc { return Array(row[0..<nc]) }
             return row + Array(repeating: Self.blankCell(attrs), count: nc - row.count)
+        }
+        func keep(_ row: [Cell]) -> [Cell] {
+            row.count >= nc ? row : row + Array(repeating: Self.blankCell(attrs), count: nc - row.count)
         }
 
         if onAlt {
             // Alt screen (vi/less): no scrollback; keep top-left, the app redraws.
             var g = Self.blankGrid(nc, nr, attrs)
-            for r in 0..<min(grid.count, nr) { g[r] = fit(grid[r]) }
+            for r in 0..<min(grid.count, nr) { g[r] = gridFit(grid[r]) }
             grid = g
             if let alt = altGrid {
                 var ag = Self.blankGrid(nc, nr, attrs)
-                for r in 0..<min(alt.count, nr) { ag[r] = fit(alt[r]) }
+                for r in 0..<min(alt.count, nr) { ag[r] = gridFit(alt[r]) }
                 altGrid = ag
             }
         } else {
@@ -465,12 +470,12 @@ final class Terminal {
             // drops lines across grow/shrink — the bug behind "scrolling is strange
             // after resize" (the boot log reappeared mid-screen).
             let absCursor = scrollback.count + cursorRow
-            let all = (scrollback + grid).map(fit)
+            let all = scrollback + grid
             let start = max(0, all.count - nr)
-            var g = Array(all[start...])
+            var g = all[start...].map(gridFit)
             while g.count < nr { g.append(Self.blankRow(nc, attrs)) }
             grid = g
-            scrollback = Array(all[0..<start])
+            scrollback = all[0..<start].map(keep)
             if scrollback.count > maxScrollback {
                 scrollback.removeFirst(scrollback.count - maxScrollback)
             }
@@ -515,7 +520,8 @@ struct TerminalScreenView: View {
     // Constant font: resizing the window changes the grid geometry (cols × rows),
     // not the glyph size. cell metrics are derived from the fixed font size.
     private let fontSize: CGFloat = 12
-    private let advance: CGFloat = 0.60      // monospaced glyph width / em
+    private let advance: CGFloat = 0.62      // monospaced glyph width / em (a hair
+                                             // wide so a full row never overflows)
     private let lineFactor: CGFloat = 1.18
 
     private var charW: CGFloat { fontSize * advance }
@@ -548,20 +554,28 @@ struct TerminalScreenView: View {
                     // Shell: scrollback above the live grid, in ONE ForEach over a
                     // unique 0..<total index space (two ForEaches both id'd 0,1,2…
                     // collide in a LazyVStack -> "undefined results" / jumbled scroll).
+                    // Rows wrap (no truncation/"…") and grow vertically; the view
+                    // re-pins to the bottom on every update so typed input stays
+                    // visible even when scrolled up into history.
                     let total = sb.count + grid.count
-                    ScrollView(.vertical) {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(0..<total), id: \.self) { idx in
-                                let inGrid = idx >= sb.count
-                                let cells = inGrid ? grid[idx - sb.count] : sb[idx]
-                                Text(line(cells, isCursorRow: inGrid && (idx - sb.count) == curRow,
-                                          fontSize: fontSize))
-                                    .frame(height: lineH, alignment: .leading)
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical) {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(0..<total), id: \.self) { idx in
+                                    let inGrid = idx >= sb.count
+                                    let cells = inGrid ? grid[idx - sb.count] : sb[idx]
+                                    Text(line(cells, isCursorRow: inGrid && (idx - sb.count) == curRow,
+                                              fontSize: fontSize))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, minHeight: lineH, alignment: .topLeading)
+                                }
+                                Color.clear.frame(height: 1).id("term_bottom")
                             }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .onChange(of: terminal.version) { _, _ in proxy.scrollTo("term_bottom", anchor: .bottom) }
+                        .onAppear { proxy.scrollTo("term_bottom", anchor: .bottom) }
                     }
-                    .defaultScrollAnchor(.bottom)
                 }
             }
             .onAppear { if valid { onResize(fitCols, fitRows) } }
