@@ -488,6 +488,16 @@ final class Terminal {
         version &+= 1
     }
 
+    // MARK: combined buffer access (scrollback + grid), for text selection
+
+    var totalLines: Int { scrollback.count + grid.count }
+    func lineCells(_ r: Int) -> [Cell] {
+        if r < 0 { return [] }
+        if r < scrollback.count { return scrollback[r] }
+        let g = r - scrollback.count
+        return g < grid.count ? grid[g] : []
+    }
+
     // MARK: keyboard -> bytes (honours application-cursor-keys)
 
     func bytes(for key: KeyInput) -> [UInt8] {
@@ -512,10 +522,13 @@ final class Terminal {
 // MARK: - Rendering
 
 struct TerminalScreenView: View {
-    let terminal: Terminal
+    let console: Console
     let focused: Bool
     /// Called when the fitted grid size (cols × rows) changes with the view.
     let onResize: (Int, Int) -> Void
+
+    @State private var dragging = false
+    private var terminal: Terminal { console.terminal }
 
     // Constant font: resizing the window changes the grid geometry (cols × rows),
     // not the glyph size. cell metrics are derived from the fixed font size.
@@ -526,6 +539,14 @@ struct TerminalScreenView: View {
 
     private var charW: CGFloat { fontSize * advance }
     private var lineH: CGFloat { (fontSize * lineFactor).rounded() }
+
+    /// Map a point in the scroll content to a cell boundary (row, col).
+    private func hit(_ loc: CGPoint) -> Console.GridPoint {
+        let row = max(0, min(terminal.totalLines - 1, Int(loc.y / lineH)))
+        let w = terminal.lineCells(row).count
+        let col = max(0, min(w, Int((loc.x / charW).rounded())))
+        return Console.GridPoint(row: row, col: col)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -542,7 +563,7 @@ struct TerminalScreenView: View {
 
             Group {
                 if terminal.onAlt {
-                    // Full-screen TUI (vi/less): fixed viewport, no scroll.
+                    // Full-screen TUI (vi/less): fixed viewport, no scroll/selection.
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(grid.indices), id: \.self) { r in
                             Text(line(grid[r], isCursorRow: r == curRow, fontSize: fontSize))
@@ -556,7 +577,8 @@ struct TerminalScreenView: View {
                     // collide in a LazyVStack -> "undefined results" / jumbled scroll).
                     // Rows wrap (no truncation/"…") and grow vertically; the view
                     // re-pins to the bottom on every update so typed input stays
-                    // visible even when scrolled up into history.
+                    // visible even when scrolled up into history. Mouse drag selects,
+                    // double-click selects a word, shift-click extends.
                     let total = sb.count + grid.count
                     ScrollViewReader { proxy in
                         ScrollView(.vertical) {
@@ -565,15 +587,31 @@ struct TerminalScreenView: View {
                                     let inGrid = idx >= sb.count
                                     let cells = inGrid ? grid[idx - sb.count] : sb[idx]
                                     Text(line(cells, isCursorRow: inGrid && (idx - sb.count) == curRow,
-                                              fontSize: fontSize))
+                                              selCols: console.selectedCols(row: idx), fontSize: fontSize))
                                         .fixedSize(horizontal: false, vertical: true)
                                         .frame(maxWidth: .infinity, minHeight: lineH, alignment: .topLeading)
                                 }
                                 Color.clear.frame(height: 1).id("term_bottom")
                             }
                             .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .coordinateSpace(name: "term")
+                            .gesture(
+                                DragGesture(minimumDistance: 4, coordinateSpace: .named("term"))
+                                    .onChanged { v in
+                                        if !dragging { console.selectBegin(hit(v.startLocation)); dragging = true }
+                                        console.selectExtend(hit(v.location))
+                                    }
+                                    .onEnded { _ in dragging = false }
+                            )
+                            .gesture(SpatialTapGesture(count: 2, coordinateSpace: .named("term"))
+                                .onEnded { console.selectWord(hit($0.location)) })
+                            .gesture(SpatialTapGesture(count: 1, coordinateSpace: .named("term"))
+                                .onEnded { _ in console.selectClear() })
+                            // shift-click to extend (macOS only; no-op on iOS)
+                            .shiftClickExtend(in: "term") { console.selectExtend(hit($0)) }
                         }
-                        .onChange(of: terminal.version) { _, _ in proxy.scrollTo("term_bottom", anchor: .bottom) }
+                        // follow the bottom on output/input, but not mid-drag-select
+                        .onChange(of: terminal.version) { _, _ in if !dragging { proxy.scrollTo("term_bottom", anchor: .bottom) } }
                         .onAppear { proxy.scrollTo("term_bottom", anchor: .bottom) }
                     }
                 }
@@ -584,37 +622,48 @@ struct TerminalScreenView: View {
     }
 
     /// Build one row (a `[Cell]`) as an AttributedString, grouping equal-attribute
-    /// runs. `isCursorRow` marks the live grid line the cursor sits on, so its
-    /// cell is drawn as an inverse block.
-    private func line(_ cells: [Cell], isCursorRow: Bool, fontSize: CGFloat) -> AttributedString {
+    /// runs. `isCursorRow` marks the live grid line the cursor sits on; `selCols`
+    /// are the selected cells (highlighted). Trailing blank cells are dropped so
+    /// the row wraps tightly and copies cleanly.
+    private func line(_ cells: [Cell], isCursorRow: Bool, selCols: Range<Int>? = nil,
+                      fontSize: CGFloat) -> AttributedString {
         let showCursor = focused && terminal.cursorVisible && isCursorRow
+        func sel(_ i: Int) -> Bool { selCols?.contains(i) ?? false }
+
+        var end = cells.count
+        while end > 0, cells[end - 1].scalar == " ", cells[end - 1].attrs == CellAttrs(), !sel(end - 1) { end -= 1 }
+        if showCursor { end = max(end, min(terminal.cursorCol + 1, cells.count)) }
+        if let s = selCols { end = max(end, min(s.upperBound, cells.count)) }
+
         var out = AttributedString()
         var i = 0
-        while i < cells.count {
+        while i < end {
             let isCursor = showCursor && i == terminal.cursorCol
+            let selected = sel(i)
             let a = cells[i].attrs
             var run = String(cells[i].scalar)
             var j = i + 1
-            // coalesce while attributes match and we're not crossing the cursor cell
-            while j < cells.count, cells[j].attrs == a,
+            while j < end, cells[j].attrs == a, sel(j) == selected,
                   !(showCursor && j == terminal.cursorCol), !isCursor {
                 run.append(Character(cells[j].scalar)); j += 1
             }
-            out.append(styled(run, a, fontSize: fontSize, cursor: isCursor))
+            out.append(styled(run, a, fontSize: fontSize, cursor: isCursor, selected: selected))
             i = isCursor ? i + 1 : j
         }
         return out
     }
 
-    private func styled(_ s: String, _ a: CellAttrs, fontSize: CGFloat, cursor: Bool) -> AttributedString {
+    private func styled(_ s: String, _ a: CellAttrs, fontSize: CGFloat,
+                        cursor: Bool, selected: Bool) -> AttributedString {
         var as_ = AttributedString(s)
         var fg = a.fg.color(foreground: true)
         var bg = a.bg.color(foreground: false)
         if a.dim { fg = fg.opacity(0.6) }
         if a.inverse != cursor { swap(&fg, &bg) }            // cursor = inverse block
+        if selected { bg = Term.selection; fg = .white }     // selection overrides
         as_.font = .system(size: fontSize, weight: a.bold ? .bold : .regular, design: .monospaced)
         as_.foregroundColor = fg
-        if bg != Term.bg || cursor || a.inverse { as_.backgroundColor = bg }
+        if bg != Term.bg || cursor || a.inverse || selected { as_.backgroundColor = bg }
         if a.underline { as_.underlineStyle = .single }
         return as_
     }

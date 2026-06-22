@@ -5,6 +5,7 @@
 // so there is no `#if os(...)` here.
 
 import SwiftUI
+import AppKit
 
 struct RootView: View {
     let console: Console
@@ -14,5 +15,25 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)   // fill the window (width too)
             .frame(minWidth: 520, minHeight: 360)
             .background(Term.bg)
+    }
+}
+
+/// System clipboard (macOS).
+enum Pasteboard {
+    static var string: String? { NSPasteboard.general.string(forType: .string) }
+    static func set(_ s: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(s, forType: .string)
+    }
+}
+
+extension View {
+    /// Shift-click extends the terminal selection (macOS; `.modifiers` is macOS-only).
+    func shiftClickExtend(in space: String, _ action: @escaping (CGPoint) -> Void) -> some View {
+        highPriorityGesture(
+            SpatialTapGesture(coordinateSpace: .named(space))
+                .modifiers(.shift)
+                .onEnded { action($0.location) })
     }
 }

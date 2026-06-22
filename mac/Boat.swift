@@ -61,6 +61,79 @@ final class Console {
         terminal.resize(cols: cols, rows: rows)
         engine?.resize(cols: cols, rows: rows)
     }
+
+    // MARK: - Selection + clipboard
+
+    /// A cell *boundary* in the combined scrollback+grid buffer: `col` is 0…width,
+    /// so a selection covers cells in `[lo.col, hi.col)`.
+    struct GridPoint: Equatable { var row: Int; var col: Int }
+
+    private(set) var selAnchor: GridPoint?
+    private(set) var selFocus: GridPoint?
+
+    /// Selection ordered in reading order, or nil if empty (anchor == focus).
+    var selectionRange: (lo: GridPoint, hi: GridPoint)? {
+        guard let a = selAnchor, let f = selFocus, a != f else { return nil }
+        let before = a.row < f.row || (a.row == f.row && a.col <= f.col)
+        return before ? (a, f) : (f, a)
+    }
+
+    func selectBegin(_ p: GridPoint) { selAnchor = p; selFocus = p }
+    func selectExtend(_ p: GridPoint) { if selAnchor == nil { selAnchor = p }; selFocus = p }
+    func selectClear() { selAnchor = nil; selFocus = nil }
+
+    /// Double-click: select the whitespace-delimited word under `p`.
+    func selectWord(_ p: GridPoint) {
+        let cells = terminal.lineCells(p.row)
+        guard !cells.isEmpty else { selectClear(); return }
+        let col = min(p.col, cells.count - 1)
+        func word(_ c: Cell) -> Bool { c.scalar != " " }
+        guard word(cells[col]) else {            // on a space: select just it
+            selAnchor = GridPoint(row: p.row, col: col)
+            selFocus  = GridPoint(row: p.row, col: col + 1); return
+        }
+        var s = col; while s > 0, word(cells[s - 1]) { s -= 1 }
+        var e = col; while e + 1 < cells.count, word(cells[e + 1]) { e += 1 }
+        selAnchor = GridPoint(row: p.row, col: s)
+        selFocus  = GridPoint(row: p.row, col: e + 1)
+    }
+
+    /// Which cells of row `r` are selected (or nil) — for the highlight.
+    func selectedCols(row r: Int) -> Range<Int>? {
+        guard let (lo, hi) = selectionRange, r >= lo.row, r <= hi.row else { return nil }
+        let w = terminal.lineCells(r).count
+        let s = (r == lo.row) ? lo.col : 0
+        let e = (r == hi.row) ? hi.col : w
+        return s < e ? s..<e : nil
+    }
+
+    /// The selected text, trailing spaces trimmed per line (lines joined with \n).
+    func selectedText() -> String {
+        guard let (lo, hi) = selectionRange else { return "" }
+        var lines: [String] = []
+        for r in lo.row...hi.row {
+            let cells = terminal.lineCells(r)
+            let s = (r == lo.row) ? lo.col : 0
+            let e = (r == hi.row) ? hi.col : cells.count
+            var line = ""
+            for c in max(0, s)..<min(e, cells.count) { line.append(Character(cells[c].scalar)) }
+            while line.hasSuffix(" ") { line.removeLast() }
+            lines.append(line)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    func copySelection() {
+        let s = selectedText()
+        if !s.isEmpty { Pasteboard.set(s) }
+    }
+
+    /// Cmd-V: send the clipboard to the guest (newlines normalised to CR).
+    func paste() {
+        guard let s = Pasteboard.string, !s.isEmpty else { return }
+        let cr = s.replacingOccurrences(of: "\r\n", with: "\r").replacingOccurrences(of: "\n", with: "\r")
+        engine?.input(Array(cr.utf8))
+    }
 }
 
 // MARK: - TugEngine (C interop: drives src/tug.h on a background thread)
@@ -246,6 +319,7 @@ enum DiskStore {
 enum Term {
     static let bg = Color(red: 0.043, green: 0.055, blue: 0.078)   // near-black ink
     static let fg = Color(red: 0.84,  green: 0.88,  blue: 0.98)
+    static let selection = Color(red: 0.20, green: 0.42, blue: 0.78)  // drag-select highlight
     static let fontSize: CGFloat = 13
 }
 
@@ -254,7 +328,7 @@ struct TerminalView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        TerminalScreenView(terminal: console.terminal, focused: focused) { cols, rows in
+        TerminalScreenView(console: console, focused: focused) { cols, rows in
             console.setSize(cols: cols, rows: rows)
         }
         .padding(4)
@@ -272,7 +346,14 @@ struct TerminalView: View {
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
         let mods = press.modifiers
-        if mods.contains(.command) { return .ignored }   // leave ⌘-shortcuts to the system
+        if mods.contains(.command) {                     // clipboard; rest -> system
+            switch press.characters {
+            case "c": if console.selectionRange != nil { console.copySelection(); return .handled }
+            case "v": console.paste(); return .handled
+            default: break
+            }
+            return .ignored
+        }
         let key = press.key
         if key == .return        { console.send(.enter);     return .handled }
         if key == .delete        { console.send(.backspace); return .handled }
