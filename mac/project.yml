@@ -24,6 +24,14 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+    # Xcode's "recommended settings" (set explicitly so it stops nagging; these
+    # are already the effective defaults). Team lives at the project level so the
+    # target inherits it.
+    DEVELOPMENT_TEAM: "692R843P25"
+    ENABLE_HARDENED_RUNTIME: "YES"
+    DEAD_CODE_STRIPPING: "YES"
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    STRING_CATALOG_GENERATE_SYMBOLS: "YES"
 targets:
   Boat:
     type: application
@@ -127,4 +135,4 @@ targets:
         # CODE_SIGNING_ALLOWED=NO on the xcodebuild command line to skip it.
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "Apple Development"
-        DEVELOPMENT_TEAM: "692R843P25"
+        # DEVELOPMENT_TEAM is set at the project level (target inherits it)
