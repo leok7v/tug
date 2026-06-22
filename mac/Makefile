@@ -51,10 +51,23 @@ ios: boat.xcodeproj
 # then restart the build server / editor. Needs: brew install xcode-build-server
 lsp: boat.xcodeproj
 	@command -v xcode-build-server >/dev/null || { echo "need xcode-build-server (brew install xcode-build-server)"; exit 1; }
-	xcodebuild -project boat.xcodeproj -scheme Boat -destination 'platform=macOS' \
-	  -configuration Debug clean build CODE_SIGNING_ALLOWED=NO 2>&1 | xcode-build-server parse -a
+	# Index BOTH platforms so every file resolves under its own SDK. xcode-build-server
+	# keys `.compile` by the single "Boat" module, so the two passes don't accumulate
+	# (the last wins, leaving the other platform's files indexed against the wrong
+	# SDK — "No such module 'Virtualization'/'AppKit'" or "'UIKit'"). So: parse iOS,
+	# stash it, parse macOS (this wins/overwrites), then merge the iOS whole-module
+	# entry back in (each carries its own SwiftFileList -> per-file SDK matching).
+	@rm -f .compile .compile.ios   # start fresh: parse -a appends, so clear first
 	xcodebuild -project boat.xcodeproj -scheme Boat -destination 'platform=iOS Simulator,name=$(SIM)' \
+	  -configuration Debug clean build CODE_SIGNING_ALLOWED=NO 2>&1 | xcode-build-server parse -a
+	mv .compile .compile.ios
+	# macOS pass must NOT clean: a clean would delete the iOS SwiftFileList that the
+	# merged iOS entry references (separate Debug-iphonesimulator dir, so building
+	# macOS alongside it is fine).
+	xcodebuild -project boat.xcodeproj -scheme Boat -destination 'platform=macOS' \
 	  -configuration Debug build CODE_SIGNING_ALLOWED=NO 2>&1 | xcode-build-server parse -a
+	python3 merge-lsp.py .compile .compile.ios
+	@rm -f .compile.ios
 	@echo "LSP config regenerated — restart the build server / reopen the editor."
 
 open: boat.xcodeproj
