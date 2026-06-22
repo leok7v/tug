@@ -523,31 +523,39 @@ struct TerminalScreenView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let valid = geo.size.width > 1 && geo.size.height > 1
             let fitCols = max(20, min(400, Int(geo.size.width  / charW)))
             let fitRows = max(4,  min(200, Int(geo.size.height / lineH)))
             let _ = terminal.version                          // observe updates
+
+            // Snapshot the rows once (value copies, cheap CoW) so the lazy stack
+            // never indexes a mutated buffer, and so every row gets a UNIQUE id.
+            let sb = terminal.scrollback
+            let grid = terminal.grid
+            let curRow = terminal.cursorRow
 
             Group {
                 if terminal.onAlt {
                     // Full-screen TUI (vi/less): fixed viewport, no scroll.
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(0..<terminal.rows, id: \.self) { r in
-                            Text(line(terminal.grid[r], cursorRow: r, fontSize: fontSize))
+                        ForEach(Array(grid.indices), id: \.self) { r in
+                            Text(line(grid[r], isCursorRow: r == curRow, fontSize: fontSize))
                                 .frame(height: lineH, alignment: .leading)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 } else {
-                    // Shell: scrollback above the live grid; pinned to the bottom
-                    // but scrollable up (trackpad / wheel) to read history.
+                    // Shell: scrollback above the live grid, in ONE ForEach over a
+                    // unique 0..<total index space (two ForEaches both id'd 0,1,2…
+                    // collide in a LazyVStack -> "undefined results" / jumbled scroll).
+                    let total = sb.count + grid.count
                     ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(terminal.scrollback.indices, id: \.self) { i in
-                                Text(line(terminal.scrollback[i], cursorRow: nil, fontSize: fontSize))
-                                    .frame(height: lineH, alignment: .leading)
-                            }
-                            ForEach(0..<terminal.rows, id: \.self) { r in
-                                Text(line(terminal.grid[r], cursorRow: r, fontSize: fontSize))
+                            ForEach(Array(0..<total), id: \.self) { idx in
+                                let inGrid = idx >= sb.count
+                                let cells = inGrid ? grid[idx - sb.count] : sb[idx]
+                                Text(line(cells, isCursorRow: inGrid && (idx - sb.count) == curRow,
+                                          fontSize: fontSize))
                                     .frame(height: lineH, alignment: .leading)
                             }
                         }
@@ -556,16 +564,16 @@ struct TerminalScreenView: View {
                     .defaultScrollAnchor(.bottom)
                 }
             }
-            .onAppear { onResize(fitCols, fitRows) }
-            .onChange(of: geo.size) { _, _ in onResize(fitCols, fitRows) }
+            .onAppear { if valid { onResize(fitCols, fitRows) } }
+            .onChange(of: geo.size) { _, _ in if valid { onResize(fitCols, fitRows) } }
         }
     }
 
     /// Build one row (a `[Cell]`) as an AttributedString, grouping equal-attribute
-    /// runs. `cursorRow` is the row index when this is the live grid (nil for
-    /// scrollback) so the cursor cell is drawn inverse on the right line.
-    private func line(_ cells: [Cell], cursorRow: Int?, fontSize: CGFloat) -> AttributedString {
-        let showCursor = focused && terminal.cursorVisible && cursorRow == terminal.cursorRow
+    /// runs. `isCursorRow` marks the live grid line the cursor sits on, so its
+    /// cell is drawn as an inverse block.
+    private func line(_ cells: [Cell], isCursorRow: Bool, fontSize: CGFloat) -> AttributedString {
+        let showCursor = focused && terminal.cursorVisible && isCursorRow
         var out = AttributedString()
         var i = 0
         while i < cells.count {
