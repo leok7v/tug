@@ -56,19 +56,34 @@ targets:
       - ../src/tug.c
       - ../src/riscv_cpu_xlen32.c
       - ../src/riscv_cpu_xlen64.c
-      - ../vendors/tinyemu/virtio.c
-      - ../vendors/tinyemu/pci.c
-      - ../vendors/tinyemu/fs.c
-      - ../vendors/tinyemu/cutils.c
-      - ../vendors/tinyemu/iomem.c
-      - ../vendors/tinyemu/simplefb.c
-      - ../vendors/tinyemu/json.c
-      - ../vendors/tinyemu/machine.c
-      - ../vendors/tinyemu/fs_disk.c
-      - ../vendors/tinyemu/riscv_machine.c
-      - ../vendors/tinyemu/softfp.c
+      # Vendored TinyEMU/slirp: skip the clang static analyzer (Product>Analyze) on
+      # third-party code we don't own — it only trips false positives there. No-op
+      # for normal compiles; our own src/*.c above stay analyzed.
+      - path: ../vendors/tinyemu/virtio.c
+        compilerFlags: &noanalyze ["-Xclang", "-analyzer-disable-all-checks"]
+      - path: ../vendors/tinyemu/pci.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/fs.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/cutils.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/iomem.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/simplefb.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/json.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/machine.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/fs_disk.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/riscv_machine.c
+        compilerFlags: *noanalyze
+      - path: ../vendors/tinyemu/softfp.c
+        compilerFlags: *noanalyze
       - path: ../vendors/tinyemu/slirp
         includes: ["*.c"]
+        compilerFlags: *noanalyze
       # guest payload baked in as app resources (staged by mac/stage-payload.sh):
       # bios/kernel/apk-initrd, plus the pre-seeded Alpine data disk packed as a
       # sparse manifest (expanded into Documents on first launch).

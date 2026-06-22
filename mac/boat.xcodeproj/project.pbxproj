@@ -7,51 +7,51 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		09E3ED20579739B43A02BD33 /* slirp.c in Sources */ = {isa = PBXBuildFile; fileRef = 89C951203F20E27FC407304D /* slirp.c */; };
+		09E3ED20579739B43A02BD33 /* slirp.c in Sources */ = {isa = PBXBuildFile; fileRef = 89C951203F20E27FC407304D /* slirp.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		0B36EC40A8D8348BAB86C6E8 /* kernel.bin in Resources */ = {isa = PBXBuildFile; fileRef = E91D39475AB672B65BEC731C /* kernel.bin */; };
 		15BD25B311B99FF5F1B650FB /* ARM64Session-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A2BE69846EC463C3FBBB24F /* ARM64Session-macOS.swift */; };
 		16805CCC5001E80C76593E4E /* Platform-iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */; };
-		20A5CF7D3CAB177A5FF34E3B /* tcp_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 67D44662AA47880F7459743B /* tcp_input.c */; };
+		20A5CF7D3CAB177A5FF34E3B /* tcp_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 67D44662AA47880F7459743B /* tcp_input.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		264697C603902AA72E75194F /* initrd-arm64.cgz in Resources */ = {isa = PBXBuildFile; fileRef = FFF035020BEB65550FE00B15 /* initrd-arm64.cgz */; };
 		28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 457C7DBAF6151797012150AA /* Boat.swift */; };
 		2D5BEE5EF8B3F48364880153 /* bios.bin in Resources */ = {isa = PBXBuildFile; fileRef = 9B1E0F0233DC95696269490F /* bios.bin */; };
-		3EFC1867BE6BBE2D384840E5 /* sbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = C8E89EA84383DA3A3F77EB0F /* sbuf.c */; };
-		3F22AFB28D86EDF6A2D744B0 /* socket.c in Sources */ = {isa = PBXBuildFile; fileRef = D5B3756C2C3C2F7CDC67E6FB /* socket.c */; };
-		4249E589227E4E7AF0404B8A /* simplefb.c in Sources */ = {isa = PBXBuildFile; fileRef = E0F5EF75D5AE3549F393034F /* simplefb.c */; };
+		3EFC1867BE6BBE2D384840E5 /* sbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = C8E89EA84383DA3A3F77EB0F /* sbuf.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		3F22AFB28D86EDF6A2D744B0 /* socket.c in Sources */ = {isa = PBXBuildFile; fileRef = D5B3756C2C3C2F7CDC67E6FB /* socket.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		4249E589227E4E7AF0404B8A /* simplefb.c in Sources */ = {isa = PBXBuildFile; fileRef = E0F5EF75D5AE3549F393034F /* simplefb.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		441A285F18B5ACDAE1B45936 /* Platform-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFF716C1EFBFDF88C650AC3 /* Platform-macOS.swift */; };
-		44B6ADDCEE63156B890BAB4C /* ip_output.c in Sources */ = {isa = PBXBuildFile; fileRef = B8AD3BA784A8FEF8C046EB76 /* ip_output.c */; };
-		51BD8AA7A24D90E008873C24 /* udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4082A9C2CE4BCCC6010646C1 /* udp.c */; };
-		5350FF3BC934304F2A43B2CC /* iomem.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A4239C56F6ADEC623DEFFCB /* iomem.c */; };
+		44B6ADDCEE63156B890BAB4C /* ip_output.c in Sources */ = {isa = PBXBuildFile; fileRef = B8AD3BA784A8FEF8C046EB76 /* ip_output.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		51BD8AA7A24D90E008873C24 /* udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4082A9C2CE4BCCC6010646C1 /* udp.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		5350FF3BC934304F2A43B2CC /* iomem.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A4239C56F6ADEC623DEFFCB /* iomem.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		58B20B35722DB4256BF8B5EB /* data-arm64.sparse in Resources */ = {isa = PBXBuildFile; fileRef = DAE71837AD19E88C80E6F696 /* data-arm64.sparse */; };
 		59295FCE32000FE846D970A7 /* Terminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6ED03730645A8A39B18FFAF /* Terminal.swift */; };
-		629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */ = {isa = PBXBuildFile; fileRef = 49E8154B5452F8FE73CD7547 /* bootp.c */; };
+		629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */ = {isa = PBXBuildFile; fileRef = 49E8154B5452F8FE73CD7547 /* bootp.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		6678B504BFFE38A50D934EFD /* App-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 771F0A9A997B5B172BA302CC /* App-macOS.swift */; };
-		70747F186000D73B4D8C5F11 /* json.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0BDCA7ACFAB72B09C71A9B /* json.c */; };
-		71675414BA1576C67B0E994E /* tcp_output.c in Sources */ = {isa = PBXBuildFile; fileRef = 4CB65DECA09580727F861A59 /* tcp_output.c */; };
+		70747F186000D73B4D8C5F11 /* json.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0BDCA7ACFAB72B09C71A9B /* json.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		71675414BA1576C67B0E994E /* tcp_output.c in Sources */ = {isa = PBXBuildFile; fileRef = 4CB65DECA09580727F861A59 /* tcp_output.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		78E387967B4BF4EB39031B9E /* App-iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61E2E907BFF256DE3B26335C /* App-iOS.swift */; };
-		78ED91C0BB29DF3DD3926C3A /* mbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A9FC3EB113FD7E671487DA9 /* mbuf.c */; };
+		78ED91C0BB29DF3DD3926C3A /* mbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A9FC3EB113FD7E671487DA9 /* mbuf.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		7B94173FEDB6CA985C249FC7 /* riscv_cpu_xlen64.c in Sources */ = {isa = PBXBuildFile; fileRef = CDDD04597C4191DB90274992 /* riscv_cpu_xlen64.c */; };
-		7D4699C93C733DD7F6BC15E5 /* fs.c in Sources */ = {isa = PBXBuildFile; fileRef = 5C397FCDC262AAC9EF73A50F /* fs.c */; };
-		8D9EA91CD6361D1A3BBB437F /* softfp.c in Sources */ = {isa = PBXBuildFile; fileRef = C03357C16A8315EA22C78820 /* softfp.c */; };
-		936789465766365FB125FF83 /* misc.c in Sources */ = {isa = PBXBuildFile; fileRef = BCB507E11D82D11A4347C986 /* misc.c */; };
-		A0175361E91D40697A485B73 /* tcp_subr.c in Sources */ = {isa = PBXBuildFile; fileRef = 96582C97AB84D477D612BA91 /* tcp_subr.c */; };
-		AF77F2D779029ADA49058407 /* ip_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 8A4B6412615D8F4FEE2AFE71 /* ip_input.c */; };
-		B880754ED760FD28743E3F32 /* virtio.c in Sources */ = {isa = PBXBuildFile; fileRef = 228A716A6790D53BA5ED4CD9 /* virtio.c */; };
-		BA27103E4E623A6F86C5A312 /* tcp_timer.c in Sources */ = {isa = PBXBuildFile; fileRef = CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */; };
-		BBFBDC52FF47034902A09DA2 /* cutils.c in Sources */ = {isa = PBXBuildFile; fileRef = 3383587608FB7AB4C0192E94 /* cutils.c */; };
+		7D4699C93C733DD7F6BC15E5 /* fs.c in Sources */ = {isa = PBXBuildFile; fileRef = 5C397FCDC262AAC9EF73A50F /* fs.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		8D9EA91CD6361D1A3BBB437F /* softfp.c in Sources */ = {isa = PBXBuildFile; fileRef = C03357C16A8315EA22C78820 /* softfp.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		936789465766365FB125FF83 /* misc.c in Sources */ = {isa = PBXBuildFile; fileRef = BCB507E11D82D11A4347C986 /* misc.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		A0175361E91D40697A485B73 /* tcp_subr.c in Sources */ = {isa = PBXBuildFile; fileRef = 96582C97AB84D477D612BA91 /* tcp_subr.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		AF77F2D779029ADA49058407 /* ip_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 8A4B6412615D8F4FEE2AFE71 /* ip_input.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		B880754ED760FD28743E3F32 /* virtio.c in Sources */ = {isa = PBXBuildFile; fileRef = 228A716A6790D53BA5ED4CD9 /* virtio.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		BA27103E4E623A6F86C5A312 /* tcp_timer.c in Sources */ = {isa = PBXBuildFile; fileRef = CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		BBFBDC52FF47034902A09DA2 /* cutils.c in Sources */ = {isa = PBXBuildFile; fileRef = 3383587608FB7AB4C0192E94 /* cutils.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		C807D416828E43AE1B968E2A /* tug.c in Sources */ = {isa = PBXBuildFile; fileRef = ACA49E7D99059EEE6D5E2E5D /* tug.c */; };
-		D3C901BD8CD7F2C975BEF944 /* fs_disk.c in Sources */ = {isa = PBXBuildFile; fileRef = B5458C37C68D63CCE4D0F26A /* fs_disk.c */; };
+		D3C901BD8CD7F2C975BEF944 /* fs_disk.c in Sources */ = {isa = PBXBuildFile; fileRef = B5458C37C68D63CCE4D0F26A /* fs_disk.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 394DDAFE9197A3A054DF0B8A /* Assets.xcassets */; };
 		D8E62F72357C886AAFB293AA /* initrd.cgz in Resources */ = {isa = PBXBuildFile; fileRef = E339D89A8390F1A7FD9DBDAF /* initrd.cgz */; };
 		E2CBC7F1CAA76B817333442F /* riscv_cpu_xlen32.c in Sources */ = {isa = PBXBuildFile; fileRef = EE3558BA57EC7DC3C1F1A4B5 /* riscv_cpu_xlen32.c */; };
-		E6BB882A502B3BC2C0401E15 /* riscv_machine.c in Sources */ = {isa = PBXBuildFile; fileRef = ADF6A065643307B15C05E58D /* riscv_machine.c */; };
+		E6BB882A502B3BC2C0401E15 /* riscv_machine.c in Sources */ = {isa = PBXBuildFile; fileRef = ADF6A065643307B15C05E58D /* riscv_machine.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		E7BAB6D51E5115FA61A84511 /* data.sparse in Resources */ = {isa = PBXBuildFile; fileRef = D7C8B2C807FBE4CB33E44327 /* data.sparse */; };
-		E8D3C0F8BE86B8CCBACA6015 /* ip_icmp.c in Sources */ = {isa = PBXBuildFile; fileRef = B64E6059E719D8DC361C31ED /* ip_icmp.c */; };
-		F76B6FC610AE5B99079C3939 /* pci.c in Sources */ = {isa = PBXBuildFile; fileRef = 862428A58CD6DC6C8FF43EF7 /* pci.c */; };
+		E8D3C0F8BE86B8CCBACA6015 /* ip_icmp.c in Sources */ = {isa = PBXBuildFile; fileRef = B64E6059E719D8DC361C31ED /* ip_icmp.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		F76B6FC610AE5B99079C3939 /* pci.c in Sources */ = {isa = PBXBuildFile; fileRef = 862428A58CD6DC6C8FF43EF7 /* pci.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 		F7D96B1F2F7AC88EE98DD857 /* kernel-arm64.bin in Resources */ = {isa = PBXBuildFile; fileRef = 27EBC46097F19DFA98A5838C /* kernel-arm64.bin */; };
-		FA0ACFD46219A913A05FA34C /* cksum.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F055EBC07DAAE5A06316A03 /* cksum.c */; };
-		FB202D2455FB901CB197FDBF /* if.c in Sources */ = {isa = PBXBuildFile; fileRef = FA6D5BF8E2E658F6813229EF /* if.c */; };
-		FDF1F080434FF0A6C0C9361B /* machine.c in Sources */ = {isa = PBXBuildFile; fileRef = A98CA21D793C31A64BD22D7F /* machine.c */; };
+		FA0ACFD46219A913A05FA34C /* cksum.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F055EBC07DAAE5A06316A03 /* cksum.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		FB202D2455FB901CB197FDBF /* if.c in Sources */ = {isa = PBXBuildFile; fileRef = FA6D5BF8E2E658F6813229EF /* if.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
+		FDF1F080434FF0A6C0C9361B /* machine.c in Sources */ = {isa = PBXBuildFile; fileRef = A98CA21D793C31A64BD22D7F /* machine.c */; settings = {COMPILER_FLAGS = "-Xclang -analyzer-disable-all-checks"; }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
