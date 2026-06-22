@@ -3,15 +3,14 @@ name: Deploy Pages
 # The site is a single self-contained www/index.html (built locally with
 # `make -C www`, committed). CI just stages and deploys it — no build tools
 # or AVIF encoder needed on the runner.
+#
+# Runs only on a *tag* push (cut a tag to publish the site) or a manual
+# workflow_dispatch — never on ordinary commits to main.
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "www/index.html"
-      - "www/og.jpg"
-      - "www/.nojekyll"
-      - ".github/workflows/pages.yml"
+    tags:
+      - "*"
   workflow_dispatch:
 
 permissions:
