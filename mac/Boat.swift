@@ -27,12 +27,29 @@ enum KeyInput: Sendable {
     case up, down, left, right
 }
 
+// MARK: - GuestSession (backend seam: RISC-V temu or ARM64 VZ)
+
+/// A running guest the terminal drives. Both backends — the RISC-V TinyEMU engine
+/// (iOS/Android + macOS) and the ARM64 Virtualization.framework VM (macOS only) —
+/// speak raw console bytes, so the terminal/UI above is backend-agnostic.
+protocol GuestSession: AnyObject, Sendable {
+    func start()
+    func input(_ bytes: [UInt8])
+    func resize(cols: Int, rows: Int)
+    func shutdown(timeout: TimeInterval)
+}
+
+extension GuestSession { func shutdown() { shutdown(timeout: 6) } }
+
+/// The single live guest, for the app lifecycle (clean power-off on quit/close).
+enum Guest { nonisolated(unsafe) static weak var current: (any GuestSession)? }
+
 // MARK: - Console (VT100 terminal + the real tug engine)
 
 @MainActor @Observable
 final class Console {
     let terminal = Terminal()
-    private var engine: TugEngine?
+    private var engine: (any GuestSession)?
 
     /// Bumped on keyboard/paste input, so the view scrolls the prompt into view.
     private(set) var inputSeq = 0
@@ -146,11 +163,7 @@ final class Console {
 /// dedicated thread, streams console bytes out via `onOutput`, and forwards
 /// keyboard bytes in via `input`. Not actor-isolated — the C side is driven from
 /// its own thread; callbacks marshal to the main actor inside the closures.
-final class TugEngine: @unchecked Sendable {
-    /// The live engine, for the app lifecycle (clean power-off on quit/close).
-    /// Set once in start(), read on quit — manually synchronized.
-    nonisolated(unsafe) static weak var current: TugEngine?
-
+final class TugEngine: GuestSession, @unchecked Sendable {
     private var handle: OpaquePointer?                 // tug *
     private var blobs: [UnsafeMutableBufferPointer<UInt8>] = []   // payload, kept alive
     private var thread: Thread?
@@ -211,7 +224,7 @@ final class TugEngine: @unchecked Sendable {
         }
         guard handle != nil else { onOutput(Array("[tug] error: tug_new failed\r\n".utf8)); return }
 
-        TugEngine.current = self
+        Guest.current = self
         let t = Thread { [weak self] in
             guard let self, let h = self.handle else { return }
             _ = tug_run(h)        // blocks until guest power-off / stop

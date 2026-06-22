@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Power the guest off before we exit. Defer termination, run the (blocking)
     // shutdown off the main thread, then let the app quit.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let engine = TugEngine.current else { return .terminateNow }
+        guard let engine = Guest.current else { return .terminateNow }
         // shutdown() blocks on the tug-run thread, which runs at .userInitiated, so
         // wait at the same QoS (no priority inversion).
         DispatchQueue.global(qos: .userInitiated).async {
