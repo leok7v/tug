@@ -219,7 +219,11 @@ final class TugEngine: @unchecked Sendable {
         }
         t.name = "tug-run"
         t.stackSize = 8 << 20
-        t.qualityOfService = .default     // matches the shutdown waiter (no inversion)
+        // Run at .userInitiated so it's never *lower* QoS than the thread that
+        // waits on it in shutdown() — a block dispatched from the main thread can
+        // inherit its user-initiated QoS, and a higher-QoS waiter on a lower-QoS
+        // thread is the priority inversion the Thread Performance Checker flags.
+        t.qualityOfService = .userInitiated
         thread = t
         t.start()
     }
