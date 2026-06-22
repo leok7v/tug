@@ -61,6 +61,9 @@ final class Console {
 
     /// Bumped on keyboard/paste input, so the view scrolls the prompt into view.
     private(set) var inputSeq = 0
+    /// Bumped on restart; the old backend's late callbacks (its power-off output)
+    /// are gated on the generation they were started with.
+    private var generation = 0
 
     init() { terminal.feedString("[tug] booting…\r\n") }
 
@@ -69,19 +72,37 @@ final class Console {
     /// per-platform `makeGuestSession(...)` factory from the persisted arch.
     func start() {
         guard engine == nil else { return }
+        let gen = generation
         let arch = GuestArch(rawValue: UserDefaults.standard.string(forKey: "guestArch") ?? "") ?? .riscv
         terminal.respond = { [weak self] bytes in self?.engine?.input(bytes) }
         let e = makeGuestSession(arch,
             onOutput: { [weak self] bytes in
-                Task { @MainActor in self?.terminal.feed(bytes) }
+                Task { @MainActor in guard let s = self, s.generation == gen else { return }; s.terminal.feed(bytes) }
             },
             onExit: { [weak self] status in
                 Task { @MainActor in
-                    self?.terminal.feedString("\r\n[tug] guest powered off (status \(status))\r\n")
+                    guard let s = self, s.generation == gen else { return }
+                    s.terminal.feedString("\r\n[tug] guest powered off (status \(status))\r\n")
                 }
             })
         engine = e
         e.start()
+    }
+
+    /// Switch the guest backend live (Settings arch change). Powers the current
+    /// guest off on a background thread, clears the terminal, then boots the new
+    /// one; the old backend's late output is ignored via the generation gate.
+    func restart() {
+        generation &+= 1
+        let old = engine
+        engine = nil
+        terminal.reset()
+        terminal.feedString("[tug] switching backend…\r\n")
+        guard let old else { start(); return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            old.shutdown()
+            DispatchQueue.main.async { [weak self] in self?.start() }
+        }
     }
 
     /// Feed a key from either keyboard to the guest as terminal bytes.
@@ -362,6 +383,9 @@ enum Term {
 struct TerminalView: View {
     let console: Console
     @FocusState private var focused: Bool
+    // Live backend switch: when the Settings arch picker changes, restart the
+    // guest in place. (Only changes on macOS, where the picker exists.)
+    @AppStorage("guestArch") private var guestArch = GuestArch.riscv.rawValue
 
     var body: some View {
         TerminalScreenView(console: console, focused: focused) { cols, rows in
@@ -373,6 +397,7 @@ struct TerminalView: View {
         .focusEffectDisabled()
         .focused($focused)
         .onAppear { focused = true; console.start() }
+        .onChange(of: guestArch) { _, _ in console.restart() }
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
         // .down AND .repeat: macOS coalesces rapid/held presses into key-repeat

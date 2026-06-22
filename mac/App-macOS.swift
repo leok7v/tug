@@ -51,7 +51,8 @@ struct BoatSettingsView: View {
             .pickerStyle(.radioGroup)
             Text("RISC-V runs the TinyEMU interpreter (portable, the iOS/Android "
                + "engine). ARM64 runs a hardware-virtualized Linux via Apple "
-               + "Virtualization (≈12× faster — macOS only). Relaunch to apply.")
+               + "Virtualization (≈12× faster — macOS only). Switching restarts "
+               + "the guest.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

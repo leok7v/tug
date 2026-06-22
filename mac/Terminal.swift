@@ -435,6 +435,15 @@ final class Terminal {
         setCursor(row: 0, col: 0)
     }
 
+    /// Clear everything (grid + scrollback + parser state) — used when switching
+    /// the guest backend live.
+    func reset() {
+        scrollback.removeAll()
+        state = .ground; params = []; curParam = nil; u8rem = 0
+        hardReset()
+        version &+= 1
+    }
+
     // MARK: resize
 
     func resize(cols newCols: Int, rows newRows: Int) {
