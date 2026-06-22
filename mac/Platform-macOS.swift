@@ -11,6 +11,7 @@ struct RootView: View {
 
     var body: some View {
         TerminalView(console: console)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)   // fill the window (width too)
             .frame(minWidth: 520, minHeight: 360)
             .background(Term.bg)
     }
