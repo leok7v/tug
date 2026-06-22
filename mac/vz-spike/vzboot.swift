@@ -9,6 +9,7 @@ func die(_ s: String) -> Never { FileHandle.standardError.write(Data((s+"\n").ut
 let a = CommandLine.arguments
 guard a.count >= 3 else { die("usage: vzboot Image initramfs [cmdline]") }
 let cmdline = a.count >= 4 ? a[3] : "console=hvc0 panic=-1"
+let diskPath: String? = a.count >= 5 ? a[4] : nil
 
 final class Delegate: NSObject, VZVirtualMachineDelegate {
     func guestDidStop(_ vm: VZVirtualMachine) { exit(0) }
@@ -30,6 +31,12 @@ serial.attachment = VZFileHandleSerialPortAttachment(
     fileHandleForWriting: FileHandle.standardOutput)
 cfg.serialPorts = [serial]
 cfg.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
+if let dp = diskPath {
+    let att = try! VZDiskImageStorageDeviceAttachment(url: URL(fileURLWithPath: dp), readOnly: false)
+    cfg.storageDevices = [VZVirtioBlockDeviceConfiguration(attachment: att)]
+    let net = VZVirtioNetworkDeviceConfiguration(); net.attachment = VZNATNetworkDeviceAttachment()
+    cfg.networkDevices = [net]
+}
 
 do { try cfg.validate() } catch { die("validate: \(error)") }
 

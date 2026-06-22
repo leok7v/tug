@@ -22,6 +22,7 @@
 		44B6ADDCEE63156B890BAB4C /* ip_output.c in Sources */ = {isa = PBXBuildFile; fileRef = B8AD3BA784A8FEF8C046EB76 /* ip_output.c */; };
 		51BD8AA7A24D90E008873C24 /* udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4082A9C2CE4BCCC6010646C1 /* udp.c */; };
 		5350FF3BC934304F2A43B2CC /* iomem.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A4239C56F6ADEC623DEFFCB /* iomem.c */; };
+		58B20B35722DB4256BF8B5EB /* data-arm64.sparse in Resources */ = {isa = PBXBuildFile; fileRef = DAE71837AD19E88C80E6F696 /* data-arm64.sparse */; };
 		59295FCE32000FE846D970A7 /* Terminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6ED03730645A8A39B18FFAF /* Terminal.swift */; };
 		629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */ = {isa = PBXBuildFile; fileRef = 49E8154B5452F8FE73CD7547 /* bootp.c */; };
 		6678B504BFFE38A50D934EFD /* App-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 771F0A9A997B5B172BA302CC /* App-macOS.swift */; };
@@ -92,6 +93,7 @@
 		CFA4D2A68191A0FBE74CAC4D /* tcp_timer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_timer.c; sourceTree = "<group>"; };
 		D5B3756C2C3C2F7CDC67E6FB /* socket.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = socket.c; sourceTree = "<group>"; };
 		D7C8B2C807FBE4CB33E44327 /* data.sparse */ = {isa = PBXFileReference; path = data.sparse; sourceTree = "<group>"; };
+		DAE71837AD19E88C80E6F696 /* data-arm64.sparse */ = {isa = PBXFileReference; path = "data-arm64.sparse"; sourceTree = "<group>"; };
 		E0F5EF75D5AE3549F393034F /* simplefb.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = simplefb.c; sourceTree = "<group>"; };
 		E339D89A8390F1A7FD9DBDAF /* initrd.cgz */ = {isa = PBXFileReference; path = initrd.cgz; sourceTree = "<group>"; };
 		E91D39475AB672B65BEC731C /* kernel.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = kernel.bin; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				9B1E0F0233DC95696269490F /* bios.bin */,
+				DAE71837AD19E88C80E6F696 /* data-arm64.sparse */,
 				D7C8B2C807FBE4CB33E44327 /* data.sparse */,
 				FFF035020BEB65550FE00B15 /* initrd-arm64.cgz */,
 				E339D89A8390F1A7FD9DBDAF /* initrd.cgz */,
@@ -272,6 +275,7 @@
 			files = (
 				D54DB8F4D7F37A705BEF0830 /* Assets.xcassets in Resources */,
 				2D5BEE5EF8B3F48364880153 /* bios.bin in Resources */,
+				58B20B35722DB4256BF8B5EB /* data-arm64.sparse in Resources */,
 				E7BAB6D51E5115FA61A84511 /* data.sparse in Resources */,
 				264697C603902AA72E75194F /* initrd-arm64.cgz in Resources */,
 				D8E62F72357C886AAFB293AA /* initrd.cgz in Resources */,

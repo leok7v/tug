@@ -301,14 +301,17 @@ final class TugEngine: GuestSession, @unchecked Sendable {
 enum DiskStore {
     private struct Bad: Error {}
 
-    /// Path to the writable data disk, expanding it on first use. Nil on failure.
-    static func dataDiskPath() -> String? {
+    /// Path to a writable data disk, expanding it from the named bundled sparse
+    /// manifest on first use. Each backend has its own disk (riscv vs arm64 hold
+    /// different binaries). Nil on failure.
+    static func dataDiskPath(resource: String = "data",
+                             filename: String = "tug-data.img") -> String? {
         let fm = FileManager.default
         guard let docs = try? fm.url(for: .documentDirectory, in: .userDomainMask,
                                      appropriateFor: nil, create: true) else { return nil }
-        let dst = docs.appendingPathComponent("tug-data.img")
+        let dst = docs.appendingPathComponent(filename)
         if fm.fileExists(atPath: dst.path) { return dst.path }
-        guard let src = Bundle.main.url(forResource: "data", withExtension: "sparse") else { return nil }
+        guard let src = Bundle.main.url(forResource: resource, withExtension: "sparse") else { return nil }
         do { try expand(from: src, to: dst); return dst.path }
         catch { try? fm.removeItem(at: dst); return nil }
     }

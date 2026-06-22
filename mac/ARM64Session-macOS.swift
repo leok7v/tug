@@ -54,6 +54,18 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
         net.attachment = VZNATNetworkDeviceAttachment()
         cfg.networkDevices = [net]
 
+        // Persistent Alpine data disk -> /dev/vda. The empty ext4 is expanded from
+        // a bundled sparse manifest into Documents on first launch; the guest's
+        // initramfs self-seeds Alpine onto it and switch_roots (apk persists).
+        if let diskPath = DiskStore.dataDiskPath(resource: "data-arm64",
+                                                 filename: "tug-data-arm64.img"),
+           let att = try? VZDiskImageStorageDeviceAttachment(
+               url: URL(fileURLWithPath: diskPath), readOnly: false) {
+            cfg.storageDevices = [VZVirtioBlockDeviceConfiguration(attachment: att)]
+        } else {
+            onOutput(Array("[tug] warning: arm64 data disk unavailable — apk won't persist\r\n".utf8))
+        }
+
         // guest console -> terminal
         outPipe.fileHandleForReading.readabilityHandler = { [weak self] fh in
             let d = fh.availableData

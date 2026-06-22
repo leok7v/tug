@@ -87,6 +87,8 @@ targets:
         buildPhase: resources
       - path: payload/initrd-arm64.cgz
         buildPhase: resources
+      - path: payload/data-arm64.sparse
+        buildPhase: resources
     settings:
       base:
         PRODUCT_NAME: Boat
