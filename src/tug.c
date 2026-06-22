@@ -304,6 +304,19 @@ static void tug_on_poweroff(void)
 
 /* ------------------------------------------------------------------ public API */
 
+/* Free only the strings tug_new strdup'd into the (stack) VirtMachineParams.
+ * NOT virt_machine_free_config(): that also frees p->files[].buf, which here
+ * alias the caller-owned settings->bios/kernel/initrd. virt_machine_init() does
+ * not retain these (upstream frees its config right after init), so calling this
+ * is safe on both the success and error paths. */
+static void tug_free_params(VirtMachineParams *p)
+{
+    free(p->machine_name);
+    free(p->cmdline);
+    free(p->tab_eth[0].driver);
+    free(p->tab_fs[0].tag);
+}
+
 tug *tug_new(const tug_settings *settings, const tug_host *host)
 {
     VirtMachineParams params, *p = &params;
@@ -360,6 +373,7 @@ tug *tug_new(const tug_settings *settings, const tug_host *host)
         if (!fs) {
             fprintf(stderr, "tug: share dir '%s' must be an existing directory\n",
                     settings->share_dir);
+            tug_free_params(p);
             free(t);
             return NULL;
         }
@@ -372,6 +386,7 @@ tug *tug_new(const tug_settings *settings, const tug_host *host)
     if (settings->disk_path && settings->disk_path[0]) {
         BlockDevice *blk = tug_block_device_init(t, settings->disk_path);
         if (!blk) {
+            tug_free_params(p);
             free(t);
             return NULL;
         }
@@ -384,6 +399,7 @@ tug *tug_new(const tug_settings *settings, const tug_host *host)
     tug_poweroff_hook = tug_on_poweroff;
 
     t->vm = virt_machine_init(p);
+    tug_free_params(p);          // init copied what it needs; free our strdup'd strings
     if (!t->vm) {
         fprintf(stderr, "tug: virt_machine_init failed\n");
         g_current = NULL;
