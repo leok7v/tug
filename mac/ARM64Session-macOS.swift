@@ -18,6 +18,8 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
     private let outPipe = Pipe()         // guest -> host console
     private let stopped = DispatchSemaphore(value: 0)
     private var vm: VZVirtualMachine?
+    private var socketDevice: VZVirtioSocketDevice?   // host->guest terminal resize
+    private var lastCols = 0, lastRows = 0
     private var didShutdown = false
 
     init(onOutput: @escaping @Sendable ([UInt8]) -> Void,
@@ -49,6 +51,7 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
             fileHandleForWriting: outPipe.fileHandleForWriting)
         cfg.serialPorts = [serial]
         cfg.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
+        cfg.socketDevices = [VZVirtioSocketDeviceConfiguration()]   // resize channel
 
         let net = VZVirtioNetworkDeviceConfiguration()      // NAT (no special entitlement)
         net.attachment = VZNATNetworkDeviceAttachment()
@@ -81,9 +84,17 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
             let vm = VZVirtualMachine(configuration: cfg, queue: self.q)
             vm.delegate = self
             self.vm = vm
+            self.socketDevice = vm.socketDevices.first as? VZVirtioSocketDevice
             vm.start { result in
                 if case .failure(let e) = result {
                     self.onOutput(Array("[tug] vz start failed: \(e)\r\n".utf8))
+                }
+            }
+            // re-send the size a few times so it lands once the guest agent is up
+            for d in [2.0, 4.0, 7.0] {
+                self.q.asyncAfter(deadline: .now() + d) { [weak self] in
+                    guard let s = self, s.lastCols > 0 else { return }
+                    s.sendWinsize(s.lastCols, s.lastRows)
                 }
             }
         }
@@ -94,9 +105,24 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
         inPipe.fileHandleForWriting.write(Data(bytes))
     }
 
-    // VZ's serial console carries no window-size channel; the guest uses a default
-    // size. (A virtio-console resize path could be added later.)
-    func resize(cols: Int, rows: Int) {}
+    // VZ's serial console has no window-size channel, so send the geometry over
+    // vsock to the guest's tug-winsize agent, which sets /dev/console's winsize.
+    func resize(cols: Int, rows: Int) {
+        lastCols = cols; lastRows = rows
+        sendWinsize(cols, rows)
+    }
+
+    private func sendWinsize(_ cols: Int, _ rows: Int) {
+        q.async { [weak self] in
+            guard let dev = self?.socketDevice else { return }
+            dev.connect(toPort: 5000) { result in
+                guard let conn = try? result.get() else { return }
+                let msg = "\(cols) \(rows)\n"
+                _ = msg.withCString { write(conn.fileDescriptor, $0, strlen($0)) }
+                conn.close()
+            }
+        }
+    }
 
     func shutdown(timeout: TimeInterval) {
         guard !didShutdown else { return }

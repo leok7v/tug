@@ -56,6 +56,7 @@ make LLVM=1 ARCH=arm64 defconfig
   --enable VIRTIO --enable VIRTIO_PCI --enable PCI_HOST_GENERIC \
   --enable VIRTIO_MMIO --enable VIRTIO_CONSOLE --enable VIRTIO_BLK \
   --enable VIRTIO_NET --enable HW_RANDOM_VIRTIO \
+  --enable VSOCKETS --enable VIRTIO_VSOCKETS \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT --disable KVM
 make LLVM=1 ARCH=arm64 HOSTCFLAGS="$HOSTFIX" olddefconfig
 make LLVM=1 ARCH=arm64 HOSTCFLAGS="$HOSTFIX" -j"$(sysctl -n hw.ncpu)" Image

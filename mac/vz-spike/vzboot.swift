@@ -31,6 +31,7 @@ serial.attachment = VZFileHandleSerialPortAttachment(
     fileHandleForWriting: FileHandle.standardOutput)
 cfg.serialPorts = [serial]
 cfg.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
+cfg.socketDevices = [VZVirtioSocketDeviceConfiguration()]
 if let dp = diskPath {
     let att = try! VZDiskImageStorageDeviceAttachment(url: URL(fileURLWithPath: dp), readOnly: false)
     cfg.storageDevices = [VZVirtioBlockDeviceConfiguration(attachment: att)]
@@ -44,5 +45,14 @@ let q = DispatchQueue(label: "vm")
 let delegate = Delegate()
 var vm: VZVirtualMachine!
 q.sync { vm = VZVirtualMachine(configuration: cfg, queue: q); vm.delegate = delegate }
-q.async { vm.start { if case .failure(let e) = $0 { die("start: \(e)") } } }
+q.async {
+    vm.start { if case .failure(let e) = $0 { die("start: \(e)") } }
+    if let ws = ProcessInfo.processInfo.environment["VZ_WINSIZE"] {
+        q.asyncAfter(deadline: .now() + 8) {
+            (vm.socketDevices.first as? VZVirtioSocketDevice)?.connect(toPort: 5000) { r in
+                if let c = try? r.get() { _ = (ws + "\n").withCString { write(c.fileDescriptor, $0, strlen($0)) }; c.close() }
+            }
+        }
+    }
+}
 dispatchMain()
