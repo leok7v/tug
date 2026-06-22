@@ -440,19 +440,46 @@ final class Terminal {
     func resize(cols newCols: Int, rows newRows: Int) {
         let nc = max(2, newCols), nr = max(2, newRows)
         guard nc != cols || nr != rows else { return }
-        var g = Self.blankGrid(nc, nr, attrs)
-        for r in 0..<min(rows, nr) {
-            for c in 0..<min(cols, nc) { g[r][c] = grid[r][c] }
+
+        // clamp/pad a row to the new column count (no long-line re-wrapping)
+        func fit(_ row: [Cell]) -> [Cell] {
+            if row.count == nc { return row }
+            if row.count > nc { return Array(row[0..<nc]) }
+            return row + Array(repeating: Self.blankCell(attrs), count: nc - row.count)
         }
-        grid = g
-        if var alt = altGrid {
-            var ag = Self.blankGrid(nc, nr, attrs)
-            for r in 0..<min(alt.count, nr) { for c in 0..<min(alt[r].count, nc) { ag[r][c] = alt[r][c] } }
-            alt = ag; altGrid = alt
+
+        if onAlt {
+            // Alt screen (vi/less): no scrollback; keep top-left, the app redraws.
+            var g = Self.blankGrid(nc, nr, attrs)
+            for r in 0..<min(grid.count, nr) { g[r] = fit(grid[r]) }
+            grid = g
+            if let alt = altGrid {
+                var ag = Self.blankGrid(nc, nr, attrs)
+                for r in 0..<min(alt.count, nr) { ag[r] = fit(alt[r]) }
+                altGrid = ag
+            }
+        } else {
+            // Primary screen: treat scrollback + grid as one continuous line
+            // buffer; the new grid is its bottom `nr` lines (cursor tracked by its
+            // absolute position). This anchors the prompt and never duplicates or
+            // drops lines across grow/shrink — the bug behind "scrolling is strange
+            // after resize" (the boot log reappeared mid-screen).
+            let absCursor = scrollback.count + cursorRow
+            let all = (scrollback + grid).map(fit)
+            let start = max(0, all.count - nr)
+            var g = Array(all[start...])
+            while g.count < nr { g.append(Self.blankRow(nc, attrs)) }
+            grid = g
+            scrollback = Array(all[0..<start])
+            if scrollback.count > maxScrollback {
+                scrollback.removeFirst(scrollback.count - maxScrollback)
+            }
+            cursorRow = max(0, min(nr - 1, absCursor - start))
         }
         cols = nc; rows = nr
         scrollTop = 0; scrollBot = nr - 1
-        clampCursor()
+        cursorCol = min(cursorCol, nc - 1)
+        pendingWrap = false
         version &+= 1
     }
 
