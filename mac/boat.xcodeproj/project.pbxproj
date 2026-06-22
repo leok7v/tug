@@ -22,8 +22,10 @@
 		5350FF3BC934304F2A43B2CC /* iomem.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A4239C56F6ADEC623DEFFCB /* iomem.c */; };
 		59295FCE32000FE846D970A7 /* Terminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6ED03730645A8A39B18FFAF /* Terminal.swift */; };
 		629EDF6F0B34DB55CA90B46D /* bootp.c in Sources */ = {isa = PBXBuildFile; fileRef = 49E8154B5452F8FE73CD7547 /* bootp.c */; };
+		6678B504BFFE38A50D934EFD /* App-macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 771F0A9A997B5B172BA302CC /* App-macOS.swift */; };
 		70747F186000D73B4D8C5F11 /* json.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0BDCA7ACFAB72B09C71A9B /* json.c */; };
 		71675414BA1576C67B0E994E /* tcp_output.c in Sources */ = {isa = PBXBuildFile; fileRef = 4CB65DECA09580727F861A59 /* tcp_output.c */; };
+		78E387967B4BF4EB39031B9E /* App-iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61E2E907BFF256DE3B26335C /* App-iOS.swift */; };
 		78ED91C0BB29DF3DD3926C3A /* mbuf.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A9FC3EB113FD7E671487DA9 /* mbuf.c */; };
 		7B94173FEDB6CA985C249FC7 /* riscv_cpu_xlen64.c in Sources */ = {isa = PBXBuildFile; fileRef = CDDD04597C4191DB90274992 /* riscv_cpu_xlen64.c */; };
 		7D4699C93C733DD7F6BC15E5 /* fs.c in Sources */ = {isa = PBXBuildFile; fileRef = 5C397FCDC262AAC9EF73A50F /* fs.c */; };
@@ -59,8 +61,10 @@
 		49E8154B5452F8FE73CD7547 /* bootp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bootp.c; sourceTree = "<group>"; };
 		4CB65DECA09580727F861A59 /* tcp_output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_output.c; sourceTree = "<group>"; };
 		5C397FCDC262AAC9EF73A50F /* fs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fs.c; sourceTree = "<group>"; };
+		61E2E907BFF256DE3B26335C /* App-iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App-iOS.swift"; sourceTree = "<group>"; };
 		67D44662AA47880F7459743B /* tcp_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tcp_input.c; sourceTree = "<group>"; };
 		7290CE6E54C4591F1E054136 /* Boat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Boat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		771F0A9A997B5B172BA302CC /* App-macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App-macOS.swift"; sourceTree = "<group>"; };
 		862428A58CD6DC6C8FF43EF7 /* pci.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pci.c; sourceTree = "<group>"; };
 		89C951203F20E27FC407304D /* slirp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = slirp.c; sourceTree = "<group>"; };
 		8A4B6412615D8F4FEE2AFE71 /* ip_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ip_input.c; sourceTree = "<group>"; };
@@ -132,6 +136,8 @@
 		5A16A5BE79A8300EF0658FE0 = {
 			isa = PBXGroup;
 			children = (
+				61E2E907BFF256DE3B26335C /* App-iOS.swift */,
+				771F0A9A997B5B172BA302CC /* App-macOS.swift */,
 				394DDAFE9197A3A054DF0B8A /* Assets.xcassets */,
 				457C7DBAF6151797012150AA /* Boat.swift */,
 				8FC8487698189C90A9EA4B71 /* Platform-iOS.swift */,
@@ -270,6 +276,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				78E387967B4BF4EB39031B9E /* App-iOS.swift in Sources */,
+				6678B504BFFE38A50D934EFD /* App-macOS.swift in Sources */,
 				28E05587034B61BB95DCE3E7 /* Boat.swift in Sources */,
 				16805CCC5001E80C76593E4E /* Platform-iOS.swift in Sources */,
 				441A285F18B5ACDAE1B45936 /* Platform-macOS.swift in Sources */,
@@ -444,9 +452,9 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 692R843P25;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift";
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift";
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift App-iOS.swift";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					CONFIG_SLIRP,
@@ -500,9 +508,9 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 692R843P25;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift";
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift";
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = "Platform-macOS.swift App-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "Platform-macOS.swift App-macOS.swift";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "Platform-iOS.swift App-iOS.swift";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					CONFIG_SLIRP,

@@ -12,17 +12,9 @@
 
 import SwiftUI
 
-// MARK: - App entry
-
-@main
-struct BoatApp: App {
-    @State private var console = Console()
-    var body: some Scene {
-        WindowGroup {
-            RootView(console: console)   // defined per-platform
-        }
-    }
-}
+// The @main App entry lives per-platform in App-macOS.swift / App-iOS.swift
+// (each compiled only for its SDK), so the macOS app can be a single Window that
+// quits on close and powers the guest off cleanly on terminate.
 
 // MARK: - Input model
 
@@ -78,9 +70,15 @@ final class Console {
 /// keyboard bytes in via `input`. Not actor-isolated — the C side is driven from
 /// its own thread; callbacks marshal to the main actor inside the closures.
 final class TugEngine: @unchecked Sendable {
+    /// The live engine, for the app lifecycle (clean power-off on quit/close).
+    /// Set once in start(), read on quit — manually synchronized.
+    nonisolated(unsafe) static weak var current: TugEngine?
+
     private var handle: OpaquePointer?                 // tug *
     private var blobs: [UnsafeMutableBufferPointer<UInt8>] = []   // payload, kept alive
     private var thread: Thread?
+    private let finished = DispatchSemaphore(value: 0) // signaled when tug_run returns
+    private var didShutdown = false
     private let onOutput: @Sendable ([UInt8]) -> Void
     private let onExit: @Sendable (Int32) -> Void
 
@@ -136,9 +134,11 @@ final class TugEngine: @unchecked Sendable {
         }
         guard handle != nil else { onOutput(Array("[tug] error: tug_new failed\r\n".utf8)); return }
 
+        TugEngine.current = self
         let t = Thread { [weak self] in
             guard let self, let h = self.handle else { return }
             _ = tug_run(h)        // blocks until guest power-off / stop
+            self.finished.signal()
         }
         t.name = "tug-run"
         t.stackSize = 8 << 20
@@ -149,6 +149,22 @@ final class TugEngine: @unchecked Sendable {
     func input(_ bytes: [UInt8]) {
         guard let h = handle, !bytes.isEmpty else { return }
         bytes.withUnsafeBufferPointer { tug_input(h, $0.baseAddress, Int32($0.count)) }
+    }
+
+    /// Power the guest off cleanly on app quit/close: send `poweroff -f` (the
+    /// guest syncs + unmounts ext4), wait for the VM loop to return, then free the
+    /// engine (fsyncs the data disk). Blocks up to `timeout` s; runs once; callable
+    /// from any thread. If the guest doesn't stop in time, force it and free anyway.
+    func shutdown(timeout: TimeInterval = 6) {
+        guard let h = handle, !didShutdown else { return }
+        didShutdown = true
+        input(Array("poweroff -f\n".utf8))
+        if finished.wait(timeout: .now() + timeout) == .timedOut {
+            tug_stop(h)
+            _ = finished.wait(timeout: .now() + 1.5)
+        }
+        tug_free(h)               // fsync + close the data disk
+        handle = nil
     }
 
     func resize(cols: Int, rows: Int) {
