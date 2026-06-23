@@ -24,14 +24,11 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    # Xcode's "recommended settings" (set explicitly so it stops nagging; these
-    # are already the effective defaults). Team lives at the project level so the
-    # target inherits it.
+    # Team lives at the project level so the target inherits it. The "recommended
+    # settings" keys are set ONLY on the target (below) — xcodegen drops target
+    # settings that duplicate the project, and Xcode's validator only credits the
+    # target's own values, so keeping them project-level made the nag persist.
     DEVELOPMENT_TEAM: "692R843P25"
-    ENABLE_HARDENED_RUNTIME: "YES"
-    DEAD_CODE_STRIPPING: "YES"
-    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
-    STRING_CATALOG_GENERATE_SYMBOLS: "YES"
 targets:
   Boat:
     type: application
@@ -109,6 +106,13 @@ targets:
         PRODUCT_NAME: Boat
         PRODUCT_BUNDLE_IDENTIFIER: dev.leok7v.boat
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Xcode 26 "recommended settings" — set on the TARGET (its validator only
+        # credits the target's own values, not project-level inheritance), so the
+        # "Update to recommended settings" nag stops.
+        ENABLE_HARDENED_RUNTIME: "YES"
+        DEAD_CODE_STRIPPING: "YES"
+        ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+        STRING_CATALOG_GENERATE_SYMBOLS: "YES"
         # --- tug engine / TinyEMU C build ---
         # Optimize the C (emulator) even in Debug — the Boat target's only C is the
         # vendored TinyEMU core + tug.c, which we don't step through; at the Debug
