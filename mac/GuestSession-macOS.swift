@@ -1,19 +1,14 @@
-// ARM64 guest backend for macOS: a hardware-virtualized Linux VM via Apple's
-// Virtualization.framework (over HVF) — ~native speed (≈12× the RISC-V
-// interpreter, measured in mac/vz-spike). Boots our own arm64 kernel
-// (Image-arm64) + an Alpine aarch64 initramfs, wiring the virtio serial console
-// to the same byte streams the terminal already consumes.
-//
-// Compiled only for the macOS SDK (see EXCLUDED_SOURCE_FILE_NAMES); the iOS
-// factory in Platform-iOS.swift never references VZ.
-
 import Foundation
+
 // @preconcurrency: Virtualization's types (VZVirtualMachineConfiguration, etc.)
 // aren't Sendable, but we confine all VM use to `q` — silence the Swift 6
 // non-Sendable-capture warnings rather than fight the framework's annotations.
+
 @preconcurrency import Virtualization
 
-final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unchecked Sendable {
+// ARM64 Session
+
+final class GuestSession: NSObject, Session, VZVirtualMachineDelegate, @unchecked Sendable {
     private let onOutput: @Sendable ([UInt8]) -> Void
     private let onExit: @Sendable (Int32) -> Void
     // .userInitiated so the QoS matches the thread that blocks on shutdown()
@@ -65,10 +60,9 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
             cfg.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
             cfg.socketDevices = [VZVirtioSocketDeviceConfiguration()]   // resize channel
 
-            let net = VZVirtioNetworkDeviceConfiguration()      // NAT (no special entitlement)
+            let net = VZVirtioNetworkDeviceConfiguration() // NAT (no special entitlement)
             net.attachment = VZNATNetworkDeviceAttachment()
             cfg.networkDevices = [net]
-
             // Persistent Alpine data disk -> /dev/vda. The empty ext4 is expanded
             // from a bundled sparse manifest into Documents on first launch; the
             // guest's initramfs self-seeds Alpine onto it and switch_roots.
@@ -80,16 +74,13 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
             } else {
                 self.onOutput(Array("[tug] warning: arm64 data disk unavailable — apk won't persist\r\n".utf8))
             }
-
             // guest console -> terminal
             self.outPipe.fileHandleForReading.readabilityHandler = { [weak self] fh in
                 let d = fh.availableData
                 if !d.isEmpty { self?.onOutput([UInt8](d)) }
             }
-
             do { try cfg.validate() }
             catch { self.onOutput(Array("[tug] vz config invalid: \(error)\r\n".utf8)); return }
-
             let vm = VZVirtualMachine(configuration: cfg, queue: self.q)
             vm.delegate = self
             self.vm = vm
@@ -114,8 +105,6 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
         inPipe.fileHandleForWriting.write(Data(bytes))
     }
 
-    // VZ's serial console has no window-size channel, so send the geometry over
-    // vsock to the guest's tug-winsize agent, which sets /dev/console's winsize.
     func resize(cols: Int, rows: Int) {
         lastCols = cols; lastRows = rows
         sendWinsize(cols, rows)
@@ -143,19 +132,19 @@ final class ARM64Session: NSObject, GuestSession, VZVirtualMachineDelegate, @unc
         }
     }
 
-    // VZVirtualMachineDelegate (fires on q)
     func guestDidStop(_ vm: VZVirtualMachine) { stopped.signal(); onExit(0) }
+
     func virtualMachine(_ vm: VZVirtualMachine, didStopWithError e: Error) {
         stopped.signal(); onExit(1)
     }
+
 }
 
-/// macOS factory: RISC-V interpreter or ARM64 (Virtualization.framework).
 func makeGuestSession(_ arch: GuestArch,
                       onOutput: @escaping @Sendable ([UInt8]) -> Void,
-                      onExit: @escaping @Sendable (Int32) -> Void) -> any GuestSession {
+                      onExit: @escaping @Sendable (Int32) -> Void) -> any Session {
     switch arch {
     case .riscv: return TugEngine(onOutput: onOutput, onExit: onExit)
-    case .arm64: return ARM64Session(onOutput: onOutput, onExit: onExit)
+    case .arm64: return GuestSession(onOutput: onOutput, onExit: onExit)
     }
 }

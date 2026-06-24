@@ -1,25 +1,5 @@
-// Boat — a universal SwiftUI terminal shell for tug.
-//
-// Shared, platform-agnostic code (no `#if os(...)`). The per-platform root layout
-// lives in Platform-iOS.swift / Platform-macOS.swift, each of which defines a
-// `RootView` — iOS/iPadOS stacks Terminal over a 102-key soft keyboard; macOS is
-// just the Terminal. Both also take a hardware (wired/Bluetooth) keyboard.
-//
-// `Console` drives the real tug RISC-V engine (src/tug.h) via `TugEngine`: the
-// guest boots on a background thread, its console bytes are parsed by the
-// VT100/xterm emulator in Terminal.swift into a cell grid, and keystrokes are
-// forwarded back as terminal bytes.
-
 import SwiftUI
 
-// The @main App entry lives per-platform in App-macOS.swift / App-iOS.swift
-// (each compiled only for its SDK), so the macOS app can be a single Window that
-// quits on close and powers the guest off cleanly on terminate.
-
-// MARK: - Input model
-
-/// A resolved key event. Soft keys and the hardware keyboard both produce these;
-/// the eventual tug bridge converts the "reserved" cases into terminal bytes.
 enum KeyInput: Sendable {
     case text(String)        // one or more printable characters
     case enter, backspace, tab, esc
@@ -27,32 +7,22 @@ enum KeyInput: Sendable {
     case up, down, left, right
 }
 
-// MARK: - GuestSession (backend seam: RISC-V temu or ARM64 VZ)
-
-/// A running guest the terminal drives. Both backends — the RISC-V TinyEMU engine
-/// (iOS/Android + macOS) and the ARM64 Virtualization.framework VM (macOS only) —
-/// speak raw console bytes, so the terminal/UI above is backend-agnostic.
-protocol GuestSession: AnyObject, Sendable {
+protocol Session: AnyObject, Sendable { // Guest Session
     func start()
     func input(_ bytes: [UInt8])
     func resize(cols: Int, rows: Int)
     func shutdown(timeout: TimeInterval)
 }
 
-extension GuestSession { func shutdown() { shutdown(timeout: 6) } }
+extension Session { func shutdown() { shutdown(timeout: 6) } }
 
-/// The single live guest, for the app lifecycle (clean power-off on quit/close).
-enum Guest { nonisolated(unsafe) static weak var current: (any GuestSession)? }
+enum Guest { nonisolated(unsafe) static weak var current: (any Session)? }
 
-/// Which guest to boot. RISC-V (TinyEMU interpreter) runs everywhere; ARM64
-/// (Virtualization.framework, ~native via HVF) is macOS-only. The per-platform
-/// `makeGuestSession(...)` factory maps this to a backend.
 enum GuestArch: String, CaseIterable, Sendable {
+
     case riscv = "RISC-V"
     case arm64 = "ARM64"
 
-    /// Default backend per platform: macOS prefers the ~12× ARM64/HVF guest;
-    /// iOS has no Virtualization.framework, so it stays on the RISC-V interpreter.
     static var defaultForPlatform: GuestArch {
         #if os(macOS)
         return .arm64
@@ -60,26 +30,22 @@ enum GuestArch: String, CaseIterable, Sendable {
         return .riscv
         #endif
     }
+
 }
 
 // MARK: - Console (VT100 terminal + the real tug engine)
 
 @MainActor @Observable
 final class Console {
-    let terminal = Terminal()
-    private var engine: (any GuestSession)?
 
-    /// Bumped on keyboard/paste input, so the view scrolls the prompt into view.
+    let terminal = Terminal()
+    private var engine: (any Session)?
+
     private(set) var inputSeq = 0
-    /// Bumped on restart; the old backend's late callbacks (its power-off output)
-    /// are gated on the generation they were started with.
     private var generation = 0
 
     init() { terminal.feedString("[tug] booting…\r\n") }
 
-    /// Boot the selected guest (RISC-V everywhere, ARM64/VZ on macOS). Idempotent;
-    /// called once from the view's onAppear. The backend is chosen by the
-    /// per-platform `makeGuestSession(...)` factory from the persisted arch.
     func start() {
         guard engine == nil else { return }
         let gen = generation
@@ -99,9 +65,6 @@ final class Console {
         e.start()
     }
 
-    /// Switch the guest backend live (Settings arch change). Powers the current
-    /// guest off on a background thread, clears the terminal, then boots the new
-    /// one; the old backend's late output is ignored via the generation gate.
     func restart() {
         generation &+= 1
         let old = engine
@@ -118,22 +81,16 @@ final class Console {
     /// Feed a key from either keyboard to the guest as terminal bytes.
     func send(_ key: KeyInput) { inputSeq &+= 1; engine?.input(terminal.bytes(for: key)) }
 
-    /// Match the on-screen grid to the guest's terminal size.
     func setSize(cols: Int, rows: Int) {
         terminal.resize(cols: cols, rows: rows)
         engine?.resize(cols: cols, rows: rows)
     }
 
-    // MARK: - Selection + clipboard
-
-    /// A cell *boundary* in the combined scrollback+grid buffer: `col` is 0…width,
-    /// so a selection covers cells in `[lo.col, hi.col)`.
     struct GridPoint: Equatable { var row: Int; var col: Int }
 
     private(set) var selAnchor: GridPoint?
     private(set) var selFocus: GridPoint?
 
-    /// Selection ordered in reading order, or nil if empty (anchor == focus).
     var selectionRange: (lo: GridPoint, hi: GridPoint)? {
         guard let a = selAnchor, let f = selFocus, a != f else { return nil }
         let before = a.row < f.row || (a.row == f.row && a.col <= f.col)
@@ -144,7 +101,6 @@ final class Console {
     func selectExtend(_ p: GridPoint) { if selAnchor == nil { selAnchor = p }; selFocus = p }
     func selectClear() { selAnchor = nil; selFocus = nil }
 
-    /// Double-click: select the whitespace-delimited word under `p`.
     func selectWord(_ p: GridPoint) {
         let cells = terminal.lineCells(p.row)
         guard !cells.isEmpty else { selectClear(); return }
@@ -160,7 +116,6 @@ final class Console {
         selFocus  = GridPoint(row: p.row, col: e + 1)
     }
 
-    /// Which cells of row `r` are selected (or nil) — for the highlight.
     func selectedCols(row r: Int) -> Range<Int>? {
         guard let (lo, hi) = selectionRange, r >= lo.row, r <= hi.row else { return nil }
         let w = terminal.lineCells(r).count
@@ -169,7 +124,6 @@ final class Console {
         return s < e ? s..<e : nil
     }
 
-    /// The selected text, trailing spaces trimmed per line (lines joined with \n).
     func selectedText() -> String {
         guard let (lo, hi) = selectionRange else { return "" }
         var lines: [String] = []
@@ -190,7 +144,6 @@ final class Console {
         if !s.isEmpty { Pasteboard.set(s) }
     }
 
-    /// Cmd-V: send the clipboard to the guest (newlines normalised to CR).
     func paste() {
         guard let s = Pasteboard.string, !s.isEmpty else { return }
         let cr = s.replacingOccurrences(of: "\r\n", with: "\r").replacingOccurrences(of: "\n", with: "\r")
@@ -199,15 +152,10 @@ final class Console {
     }
 }
 
-// MARK: - TugEngine (C interop: drives src/tug.h on a background thread)
+final class TugEngine: Session, @unchecked Sendable {
 
-/// Owns the C `tug` engine: loads the bundled payload, starts the VM on a
-/// dedicated thread, streams console bytes out via `onOutput`, and forwards
-/// keyboard bytes in via `input`. Not actor-isolated — the C side is driven from
-/// its own thread; callbacks marshal to the main actor inside the closures.
-final class TugEngine: GuestSession, @unchecked Sendable {
-    private var handle: OpaquePointer?                 // tug *
-    private var blobs: [UnsafeMutableBufferPointer<UInt8>] = []   // payload, kept alive
+    private var handle: OpaquePointer?
+    private var blobs: [UnsafeMutableBufferPointer<UInt8>] = [] // payload, kept alive
     private var thread: Thread?
     private let finished = DispatchSemaphore(value: 0) // signaled when tug_run returns
     private var didShutdown = false
@@ -226,20 +174,15 @@ final class TugEngine: GuestSession, @unchecked Sendable {
               let initrd = loadResource("initrd", "cgz") else {
             onOutput(Array("[tug] error: bundled payload missing\r\n".utf8)); return
         }
-
-        // Writable Alpine data disk (apk userland + the `essentials` toolchains),
-        // expanded from the bundled sparse image into Documents on first launch.
         let diskPath = DiskStore.dataDiskPath()
         if diskPath == nil {
             onOutput(Array("[tug] warning: data disk unavailable — apk won't persist\r\n".utf8))
         }
-
         var settings = tug_settings()
         settings.ram_mb = 512
         settings.bios   = UnsafePointer(bios.baseAddress);   settings.bios_len   = Int32(bios.count)
         settings.kernel = UnsafePointer(kernel.baseAddress); settings.kernel_len = Int32(kernel.count)
         settings.initrd = UnsafePointer(initrd.baseAddress); settings.initrd_len = Int32(initrd.count)
-
         var host = tug_host()
         host.ctx = Unmanaged.passRetained(self).toOpaque()
         host.console_out = { ctx, data, len in
@@ -252,8 +195,6 @@ final class TugEngine: GuestSession, @unchecked Sendable {
             let me = Unmanaged<TugEngine>.fromOpaque(ctx).takeUnretainedValue()
             me.onExit(status)
         }
-
-        // disk_path only needs to be valid across tug_new (it opens the file there).
         func makeEngine() -> OpaquePointer? {
             withUnsafePointer(to: &settings) { sp in
                 withUnsafePointer(to: &host) { hp in tug_new(sp, hp) }
@@ -274,10 +215,6 @@ final class TugEngine: GuestSession, @unchecked Sendable {
         }
         t.name = "tug-run"
         t.stackSize = 8 << 20
-        // Run at .userInitiated so it's never *lower* QoS than the thread that
-        // waits on it in shutdown() — a block dispatched from the main thread can
-        // inherit its user-initiated QoS, and a higher-QoS waiter on a lower-QoS
-        // thread is the priority inversion the Thread Performance Checker flags.
         t.qualityOfService = .userInitiated
         thread = t
         t.start()
@@ -288,10 +225,6 @@ final class TugEngine: GuestSession, @unchecked Sendable {
         bytes.withUnsafeBufferPointer { tug_input(h, $0.baseAddress, Int32($0.count)) }
     }
 
-    /// Power the guest off cleanly on app quit/close: send `poweroff -f` (the
-    /// guest syncs + unmounts ext4), wait for the VM loop to return, then free the
-    /// engine (fsyncs the data disk). Blocks up to `timeout` s; runs once; callable
-    /// from any thread. If the guest doesn't stop in time, force it and free anyway.
     func shutdown(timeout: TimeInterval = 6) {
         guard let h = handle, !didShutdown else { return }
         didShutdown = true
@@ -311,8 +244,6 @@ final class TugEngine: GuestSession, @unchecked Sendable {
 
     func stop() { if let h = handle { tug_stop(h) } }
 
-    /// Load a bundled resource into a malloc'd buffer that outlives the engine
-    /// (tug only reads these blobs; they must stay valid for the VM's lifetime).
     private func loadResource(_ name: String, _ ext: String) -> UnsafeMutableBufferPointer<UInt8>? {
         guard let url = Bundle.main.url(forResource: name, withExtension: ext),
               let data = try? Data(contentsOf: url) else { return nil }
@@ -323,18 +254,10 @@ final class TugEngine: GuestSession, @unchecked Sendable {
     }
 }
 
-// MARK: - DiskStore (first-launch sparse-expand of the bundled data disk)
-
-/// The Alpine data disk is shipped as a compact sparse manifest (build-sparse.py)
-/// because iOS can't create an ext4 filesystem and the raw image is 32 GB. On
-/// first launch we expand it into the app's Documents as a sparse file (only the
-/// ~26 MB of real data consumes storage; it grows as apk installs packages).
 enum DiskStore {
+
     private struct Bad: Error {}
 
-    /// Path to a writable data disk, expanding it from the named bundled sparse
-    /// manifest on first use. Each backend has its own disk (riscv vs arm64 hold
-    /// different binaries). Nil on failure.
     static func dataDiskPath(resource: String = "data",
                              filename: String = "tug-data.img") -> String? {
         let fm = FileManager.default
@@ -362,12 +285,10 @@ enum DiskStore {
         guard data[0..<8].elementsEqual("TUGSPRS1".utf8) else { throw Bad() }
         i = 8
         let total = try u64()
-
         let fd = open(dst.path, O_CREAT | O_WRONLY | O_TRUNC, 0o644)
         guard fd >= 0 else { throw Bad() }
         defer { close(fd) }
-        guard ftruncate(fd, off_t(total)) == 0 else { throw Bad() }   // sparse hole
-
+        guard ftruncate(fd, off_t(total)) == 0 else { throw Bad() } // sparse hole
         while i < data.count {
             let off = try u64()
             let len = Int(try u64())
@@ -381,20 +302,18 @@ enum DiskStore {
     }
 }
 
-// MARK: - Terminal view (renders the console, takes hardware-keyboard input)
-
 enum Term {
-    static let bg = Color(red: 0.043, green: 0.055, blue: 0.078)   // near-black ink
+    static let bg = Color(red: 0.043, green: 0.055, blue: 0.078) // near-black ink
     static let fg = Color(red: 0.84,  green: 0.88,  blue: 0.98)
-    static let selection = Color(red: 0.20, green: 0.42, blue: 0.78)  // drag-select highlight
+    static let selection = Color(red: 0.20, green: 0.42, blue: 0.78) // drag-select highlight
     static let fontSize: CGFloat = 13
 }
 
 struct TerminalView: View {
+
     let console: Console
+
     @FocusState private var focused: Bool
-    // Live backend switch: when the Settings arch picker changes, restart the
-    // guest in place. (Only changes on macOS, where the picker exists.)
     @AppStorage("guestArch") private var guestArch = GuestArch.defaultForPlatform.rawValue
 
     var body: some View {
@@ -410,14 +329,12 @@ struct TerminalView: View {
         .onChange(of: guestArch) { _, _ in console.restart() }
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
-        // .down AND .repeat: macOS coalesces rapid/held presses into key-repeat
-        // events, so a .down-only handler swallows fast Return/key presses.
         .onKeyPress(phases: [.down, .repeat]) { press in handle(press) }
     }
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
         let mods = press.modifiers
-        if mods.contains(.command) {                     // clipboard; rest -> system
+        if mods.contains(.command) { // clipboard; rest -> system
             switch press.characters {
             case "c": if console.selectionRange != nil { console.copySelection(); return .handled }
             case "v": console.paste(); return .handled
@@ -442,14 +359,13 @@ struct TerminalView: View {
     }
 }
 
-// MARK: - 102-key soft keyboard
-
 enum KeyKind: Sendable {
     case char
     case mod(Mod)
     case special(KeyInput)
     case fn                      // F-keys: present for completeness, reserved
 }
+
 enum Mod: Sendable { case shift, ctrl, alt, caps }
 
 struct KKey: Identifiable, Sendable {
@@ -493,6 +409,7 @@ enum KB {
 }
 
 struct SoftKeyboardView: View {
+
     let console: Console
     @State private var shift = false
     @State private var caps  = false
@@ -532,7 +449,7 @@ struct SoftKeyboardView: View {
         case .special(let input):
             console.send(input); shift = false; ctrl = false
         case .fn:
-            break                       // reserved for the tug bridge
+            break // reserved for the tug bridge
         case .char:
             let isLetter = key.cap.first?.isLetter ?? false
             let upper = isLetter ? (caps != shift) : shift
@@ -544,8 +461,8 @@ struct SoftKeyboardView: View {
     }
 }
 
-/// One keyboard row: keys sized proportionally to their `weight`.
 struct KeyRow: View {
+
     let keys: [KKey]
     let upper: Bool
     let active: (KKey) -> Bool
@@ -568,6 +485,7 @@ struct KeyRow: View {
 }
 
 struct KeyButton: View {
+
     let key: KKey
     let upper: Bool
     let active: Bool

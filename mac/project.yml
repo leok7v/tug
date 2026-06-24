@@ -24,11 +24,13 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    # Team lives at the project level so the target inherits it. The "recommended
-    # settings" keys are set ONLY on the target (below) — xcodegen drops target
-    # settings that duplicate the project, and Xcode's validator only credits the
-    # target's own values, so keeping them project-level made the nag persist.
-    DEVELOPMENT_TEAM: "692R843P25"
+    DEVELOPMENT_TEAM: "692R843P25"   # project-level so the target inherits it
+    # Xcode 26 "recommended settings" checked at PROJECT scope (the dialog labels
+    # them "Project 'boat'"). ENABLE_HARDENED_RUNTIME is checked per-TARGET instead
+    # and lives in the target's settings.base.
+    DEAD_CODE_STRIPPING: "YES"
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    STRING_CATALOG_GENERATE_SYMBOLS: "YES"
 targets:
   Boat:
     type: application
@@ -43,7 +45,7 @@ targets:
       - App-iOS.swift
       - Platform-iOS.swift
       - Platform-macOS.swift
-      - ARM64Session-macOS.swift
+      - GuestSession-macOS.swift
       - Assets.xcassets
       # tug engine (embeddable library) + the TinyEMU core it drives. Same object
       # set the Makefile links for `tug`, minus temu.o (its own main) — Boat
@@ -106,13 +108,11 @@ targets:
         PRODUCT_NAME: Boat
         PRODUCT_BUNDLE_IDENTIFIER: dev.leok7v.boat
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Xcode 26 "recommended settings" — set on the TARGET (its validator only
-        # credits the target's own values, not project-level inheritance), so the
-        # "Update to recommended settings" nag stops.
+        # Xcode 26 "recommended settings": ENABLE_HARDENED_RUNTIME is checked at the
+        # TARGET scope, so it lives here; the others are checked at the PROJECT scope
+        # and live there (see project settings.base). Splitting them this way is the
+        # only thing that silences the "Update to recommended settings" nag.
         ENABLE_HARDENED_RUNTIME: "YES"
-        DEAD_CODE_STRIPPING: "YES"
-        ENABLE_USER_SCRIPT_SANDBOXING: "YES"
-        STRING_CATALOG_GENERATE_SYMBOLS: "YES"
         # --- tug engine / TinyEMU C build ---
         # Optimize the C (emulator) even in Debug — the Boat target's only C is the
         # vendored TinyEMU core + tug.c, which we don't step through; at the Debug
@@ -163,10 +163,10 @@ targets:
         INFOPLIST_KEY_NSHumanReadableCopyright: "tug — MIT"
         # compile each platform file only for its own SDK (no #if in the source)
         "EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]": "Platform-iOS.swift App-iOS.swift"
-        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]": "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift"
-        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]": "Platform-macOS.swift App-macOS.swift ARM64Session-macOS.swift"
+        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]": "Platform-macOS.swift App-macOS.swift GuestSession-macOS.swift"
+        "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]": "Platform-macOS.swift App-macOS.swift GuestSession-macOS.swift"
         # Virtualization.framework entitlement (macOS only; auto-linked from the
-        # `import Virtualization` in ARM64Session-macOS.swift).
+        # `import Virtualization` in GuestSession-macOS.swift).
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": "Boat-macOS.entitlements"
         # Automatic signing so the app installs on a real device. Headless
         # simulator/macOS verification (make mac / make ios) still passes

@@ -1,9 +1,3 @@
-// macOS @main entry. A single Window (not a WindowGroup) so there's exactly one
-// terminal; closing it quits the app, and quitting (Cmd-Q / window close) powers
-// the guest off cleanly first so ext4 is synced + unmounted.
-//
-// Compiled only for the macOS SDK (see EXCLUDED_SOURCE_FILE_NAMES in project.yml).
-
 import SwiftUI
 import AppKit
 
@@ -32,15 +26,13 @@ struct BoatApp: SwiftUI.App {
     @State private var console = Console()
 
     var body: some Scene {
-        Window("Boat", id: "boat") {
-            RootView(console: console)
-        }
+        Window("TugBoat", id: "boat") { RootView(console: console) }
         Settings { BoatSettingsView() }
     }
 }
 
-/// Settings (Cmd-,): pick the guest backend. macOS only — iOS has no choice.
 struct BoatSettingsView: View {
+
     @AppStorage("guestArch") private var guestArch = GuestArch.defaultForPlatform.rawValue
 
     var body: some View {
@@ -59,4 +51,5 @@ struct BoatSettingsView: View {
         .padding(20)
         .frame(width: 420)
     }
+
 }
